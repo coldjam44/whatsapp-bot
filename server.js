@@ -5,29 +5,13 @@ import QRCode from 'qrcode';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import PhoneDatabase from './database.js';
 
 // Configuration constants
 const PORT = 8046;
 const TEST_NUMBER = "966504693227";
 
-// Global state management
-const globalState = {
-    isAuthenticated: false,
-    currentQR: null,
-    userInfo: null,
-    client: null,
-    readyEventFired: false,
-    authTime: null,
-    heartbeatInterval: null,
-    botStats: null
-};
-
-// Global bulk messaging state
-
-// WebSocket-based bulk messaging processing function
-
-
-// Logger utility
+// Simple logger
 const logger = {
     info: (message, details = []) => {
         console.log(`ℹ️  ${message}`);
@@ -50,6 +34,22 @@ const logger = {
         details.forEach(detail => console.log(`   • ${detail}`));
     }
 };
+
+// Global state management
+const globalState = {
+    isAuthenticated: false,
+    currentQR: null,
+    userInfo: null,
+    client: null,
+    readyEventFired: false,
+    authTime: null,
+    heartbeatInterval: null,
+    botStats: null
+};
+
+// Initialize database
+const phoneDB = new PhoneDatabase();
+
 
 // WhatsApp client configuration
 const createWhatsAppClient = () => {
@@ -542,14 +542,13 @@ const createExpressServer = () => {
                         <a href="/" class="nav-brand">🤖 WhatsApp Bot</a>
                         <div class="nav-links">
                             <a href="/" class="nav-link active">Dashboard</a>
-                            <a href="/bulk-messaging" class="nav-link">📤 Bulk Messaging</a>
+                            <a href="/spreadsheet" class="nav-link">📊 Spreadsheet</a>
                         </div>
                     </div>
                 </nav>
 
                 <div class="container">
                     <h1>🤖 WhatsApp Bot Dashboard</h1>
-                    <p><strong>Bot is running on port ${PORT}</strong></p>
                     
                     ${globalState.isAuthenticated ? `
                         <div class="qr-container" style="background-color: #d4edda; border-color: #28a745;">
@@ -604,521 +603,370 @@ const createExpressServer = () => {
                     
                     ${globalState.isAuthenticated ? `
                         <div class="qr-container" style="background-color: #e3f2fd; border-color: #2196f3; margin-top: 30px;">
-                            <h3>📤 Bulk Messaging Tool</h3>
-                            <p>Send messages to multiple phone numbers at once using our dedicated bulk messaging page</p>
-                            <a href="/bulk-messaging" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; transition: all 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                                🚀 Go to Bulk Messaging Tool
+                            <h3>📊 Contact Management & Messaging</h3>
+                            <p>Manage your contacts and send messages using our integrated spreadsheet system</p>
+                            <a href="/spreadsheet" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; transition: all 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                🚀 Go to Spreadsheet
                             </a>
+                        </div>
+                        
+                        <div class="qr-container" style="background-color: #f8d7da; border-color: #dc3545; margin-top: 20px;">
+                            <h3>🚪 Logout</h3>
+                            <p>Disconnect from WhatsApp and clear authentication</p>
+                            <button onclick="logout()" style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                                🚪 Logout & Clear Session
+                            </button>
                         </div>
                     ` : ''}
                 </div>
             </body>
+            <script>
+                function logout() {
+                    if (confirm('Are you sure you want to logout? This will disconnect from WhatsApp and clear the session.')) {
+                        fetch('/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Logged out successfully! Page will refresh.');
+                                window.location.reload();
+                            } else {
+                                alert('Error during logout: ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            alert('Error during logout: ' + error.message);
+                        });
+                    }
+                }
+            </script>
             </html>
         `;
 
         res.send(html);
     });
 
-    // Bulk messaging page route
-    app.get('/bulk-messaging', (req, res) => {
-        res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Messaging Tool - WhatsApp Bot</title>
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 0;
-            background: #f0f2f5;
-            color: #333;
-        }
-        .nav {
-            background: #fff;
-            padding: 15px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        .nav-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 20px;
-        }
-        .nav-brand {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2c3e50;
-            text-decoration: none;
-        }
-        .nav-links {
-            display: flex;
-            gap: 20px;
-        }
-        .nav-link {
-            color: #34495e;
-            text-decoration: none;
-            padding: 10px 15px;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-        .nav-link:hover {
-            background: #667eea;
-            color: white;
-        }
-        .nav-link.active {
-            background: #667eea;
-            color: white;
-        }
-        .container {
-            max-width: 800px;
-            margin: 40px auto;
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-        .form-group {
-            margin-bottom: 25px;
-        }
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #333;
-            font-size: 16px;
-        }
-        .form-input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-            box-sizing: border-box;
-        }
-        .form-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .form-textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        .btn-group {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-        .btn {
-            padding: 15px 30px;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-        }
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #5a6fd8;
-            transform: translateY(-2px);
-        }
-        .btn-primary:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        .connection-status {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            z-index: 1001;
-        }
-        .status-connected {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .status-disconnected {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .logging-container {
-            margin-top: 30px;
-            background: #1e1e1e;
-            border-radius: 10px;
-            padding: 20px;
-            color: #00ff00;
-            font-family: monospace;
-        }
-        .logBox {
-            background: #000;
-            padding: 15px;
-            border-radius: 8px;
-            height: 300px;
-            overflow-y: auto;
-            font-size: 12px;
-            line-height: 1.4;
-        }
-    </style>
-</head>
-<body>
-    <nav class="nav">
-        <div class="nav-container">
-            <a href="/" class="nav-brand">WhatsApp Bot</a>
-            <div class="nav-links">
-                <a href="/" class="nav-link">Dashboard</a>
-                <a href="/bulk-messaging" class="nav-link active">Bulk Messaging</a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="connection-status" id="connectionStatus">
-        <span id="statusText">Ready to send</span>
-    </div>
-
-    <div class="container">
-        <div class="header">
-            <h1>Bulk Messaging Tool</h1>
-            <p>Send messages to multiple phone numbers at once using WhatsApp</p>
-        </div>
-
-        <form id="bulkMessageForm">
-            <div class="form-group">
-                <label for="phoneNumbers" class="form-label">
-                    Phone Numbers (one per line or separated by /):
-                </label>
-                <textarea 
-                    id="phoneNumbers" 
-                    name="phoneNumbers" 
-                    class="form-input form-textarea"
-                    placeholder="+966501234567, +1234567890, 00442012345678"
-                    required
-                ></textarea>
-                <small style="color: #666; font-size: 12px;">
-                    Format: One number per line OR separated by forward slashes (/)
-                </small>
-            </div>
+    // Logout endpoint
+    app.post('/logout', async (req, res) => {
+        try {
+            logger.info('Logout requested', ['User initiated logout process']);
             
-            <div class="form-group">
-                <label for="messageText" class="form-label">
-                    Message:
-                </label>
-                <textarea 
-                    id="messageText" 
-                    name="messageText" 
-                    class="form-input form-textarea"
-                    placeholder="Type your message here..."
-                    required
-                ></textarea>
-            </div>
-            
-            <div class="btn-group">
-                <button type="button" id="sendBtn" class="btn btn-primary">
-                    Send
-                </button>
-                <button type="button" id="clearFormBtn" class="btn btn-secondary">
-                    Clear Form
-                </button>
-            </div>
-        </form>
-
-        <div class="logging-container">
-            <h3 style="color: #fff; margin-bottom: 15px;">Real-time Logs</h3>
-            <div id="logBox" class="logBox">
-                <div style="color: #888;">Waiting for bulk messaging to start...</div>
-            </div>
-            <div style="margin-top: 10px; display: flex; gap: 10px;">
-                <button id="clearLogsBtn" class="btn btn-secondary" style="padding: 8px 15px; font-size: 12px;">
-                    Clear Logs
-                </button>
-                <button id="copyLogsBtn" class="btn btn-secondary" style="padding: 8px 15px; font-size: 12px;">
-                    Copy Logs
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // WebSocket connection
-        let ws = null;
-        let isConnected = false;
-
-        // Logging functionality
-        function addLog(message, type) {
-            const logBox = document.getElementById('logBox');
-            const timestamp = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            
-            let color = '#00ff00';
-            if (type === 'error') color = '#ff4444';
-            if (type === 'warning') color = '#ffaa00';
-            if (type === 'success') color = '#44ff44';
-            
-            logEntry.innerHTML = '<span style="color: #888;">[' + timestamp + ']</span> <span style="color: ' + color + ';">' + message + '</span>';
-            logBox.appendChild(logEntry);
-            
-            logBox.scrollTop = logBox.scrollHeight;
-            
-            if (logBox.children.length > 100) {
-                logBox.removeChild(logBox.firstChild);
-            }
-        }
-
-        function updateConnectionStatus(text, connected) {
-            const statusEl = document.getElementById('connectionStatus');
-            const statusTextEl = document.getElementById('statusText');
-            
-            statusEl.className = 'connection-status ' + (connected ? 'status-connected' : 'status-disconnected');
-            statusTextEl.textContent = connected ? 'Connected' : text;
-        }
-
-        // Form handling
-        function parsePhoneNumbers(input) {
-            let numbers = input.split('\n');
-            let allNumbers = [];
-            
-            for (let line of numbers) {
-                let lineNumbers = line.split('/');
-                for (let num of lineNumbers) {
-                    let trimmed = num.trim();
-                    if (trimmed.length > 0) {
-                        allNumbers.push(trimmed);
-                    }
+            // Destroy the WhatsApp client session
+            if (globalState.client) {
+                try {
+                    await globalState.client.destroy();
+                    logger.info('WhatsApp client destroyed', ['Session terminated']);
+                } catch (error) {
+                    logger.warning('Error destroying client', [error.message]);
                 }
             }
             
-            return allNumbers;
-        }
-
-        function validatePhoneNumber(phone) {
-            let cleanPhone = '';
-            for (let char of phone) {
-                if ((char >= '0' && char <= '9') || char === '+' || char === ' ') {
-                    cleanPhone += char;
+            // Clear global state
+            globalState.client = null;
+            globalState.isAuthenticated = false;
+            globalState.userInfo = null;
+            globalState.currentQR = null;
+            
+            // Remove authentication files
+            const fs = await import('fs');
+            const path = await import('path');
+            
+            const authDir = path.join(process.cwd(), '.wwebjs_auth');
+            const cacheDir = path.join(process.cwd(), '.wwebjs_cache');
+            
+            try {
+                if (fs.existsSync(authDir)) {
+                    fs.rmSync(authDir, { recursive: true, force: true });
+                    logger.info('Authentication directory removed', [authDir]);
                 }
-            }
-            
-            cleanPhone = cleanPhone.trim();
-            
-            if (cleanPhone.length === 0) return false;
-            
-            if (cleanPhone.startsWith('+') && cleanPhone.length >= 8 && cleanPhone.length <= 16) {
-                let digitsOnly = true;
-                for (let i = 1; i < cleanPhone.length; i++) {
-                    if (cleanPhone[i] < '0' || cleanPhone[i] > '9') {
-                        digitsOnly = false;
-                        break;
-                    }
+                if (fs.existsSync(cacheDir)) {
+                    fs.rmSync(cacheDir, { recursive: true, force: true });
+                    logger.info('Cache directory removed', [cacheDir]);
                 }
-                if (digitsOnly) return true;
+            } catch (error) {
+                logger.warning('Error removing auth/cache directories', [error.message]);
             }
             
-            if (cleanPhone.startsWith('00') && cleanPhone.length >= 10 && cleanPhone.length <= 18) {
-                let digitsOnly = true;
-                for (let char of cleanPhone) {
-                    if (char < '0' || char > '9') {
-                        digitsOnly = false;
-                        break;
-                    }
-                }
-                if (digitsOnly) return true;
-            }
+            logger.success('Logout completed successfully', [
+                'Session cleared',
+                'Authentication files removed',
+                'Client destroyed'
+            ]);
             
-            if (cleanPhone.length >= 7 && cleanPhone.length <= 15) {
-                let digitsOnly = true;
-                for (let char of cleanPhone) {
-                    if (char < '0' || char > '9') {
-                        digitsOnly = false;
-                        break;
-                    }
-                }
-                if (digitsOnly) return true;
-            }
+            res.json({
+                success: true,
+                message: 'Logged out successfully'
+            });
             
-            return false;
+        } catch (error) {
+            logger.error('Error during logout', [error.message]);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
         }
-
-        function clearForm() {
-            document.getElementById('phoneNumbers').value = '';
-            document.getElementById('messageText').value = '';
-        }
-
-        // Send button handler
-        function handleSendClick() {
-            const sendBtn = document.getElementById('sendBtn');
-            const phoneNumbers = document.getElementById('phoneNumbers').value;
-            const message = document.getElementById('messageText').value;
-            
-            if (!phoneNumbers.trim() || !message.trim()) {
-                addLog('Please fill in both phone numbers and message fields', 'error');
-                return;
-            }
-            
-            const parsedNumbers = parsePhoneNumbers(phoneNumbers);
-            if (parsedNumbers.length === 0) {
-                addLog('Please enter valid phone numbers', 'error');
-                return;
-            }
-            
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
-            
-            document.getElementById('logBox').innerHTML = '';
-            addLog('Starting bulk messaging...', 'success');
-            addLog('Total numbers: ' + parsedNumbers.length, 'info');
-            addLog('Message: ' + message.substring(0, 50) + '...', 'info');
-            
-            startWebSocketAndSend(parsedNumbers, message);
-        }
-        
-        // WebSocket connection and sending
-        function startWebSocketAndSend(phoneNumbers, message) {
-            addLog('Connecting to WebSocket...', 'info');
-            
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = protocol + '//' + window.location.host + '/ws';
-            
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function() {
-                isConnected = true;
-                addLog('WebSocket connected!', 'success');
-                updateConnectionStatus('WebSocket Connected', true);
-                
-                ws.send(JSON.stringify({
-                    type: 'start_bulk_messaging',
-                    phoneNumbers: phoneNumbers,
-                    message: message
-                }));
-            };
-            
-            ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                handleWebSocketMessage(data);
-            };
-            
-            ws.onclose = function() {
-                isConnected = false;
-                addLog('WebSocket disconnected', 'error');
-                updateConnectionStatus('WebSocket Disconnected', false);
-                
-                const sendBtn = document.getElementById('sendBtn');
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send';
-            };
-            
-            ws.onerror = function(error) {
-                addLog('WebSocket error: ' + error.message, 'error');
-                
-                const sendBtn = document.getElementById('sendBtn');
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send';
-            };
-        }
-
-        function handleWebSocketMessage(data) {
-            switch(data.type) {
-                case 'bulk_progress':
-                    addLog('Progress: ' + data.current + '/' + data.total + ' sent (' + data.progress + '%)', 'info');
-                    if (data.success > 0) addLog('Success: ' + data.success + ' messages sent', 'success');
-                    if (data.failed > 0) addLog('Failed: ' + data.failed + ' messages', 'error');
-                    break;
-                case 'bulk_complete':
-                    addLog('Bulk messaging completed!', 'success');
-                    addLog('Final Results: ' + data.success + ' success, ' + data.failed + ' failed', 'info');
-                    
-                    const sendBtn = document.getElementById('sendBtn');
-                    if (sendBtn) {
-                        sendBtn.disabled = false;
-                        sendBtn.textContent = 'Send';
-                    }
-                    break;
-                case 'bulk_log':
-                    addLog(data.message, data.logType || 'info');
-                    break;
-                default:
-                    addLog('Received: ' + JSON.stringify(data), 'info');
-            }
-        }
-
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            const sendBtn = document.getElementById('sendBtn');
-            const clearBtn = document.getElementById('clearFormBtn');
-            
-            if (sendBtn) {
-                sendBtn.addEventListener('click', handleSendClick);
-            }
-            
-            if (clearBtn) {
-                clearBtn.addEventListener('click', clearForm);
-            }
-
-            const clearLogsBtn = document.getElementById('clearLogsBtn');
-            const copyLogsBtn = document.getElementById('copyLogsBtn');
-            
-            if (clearLogsBtn) {
-                clearLogsBtn.addEventListener('click', function() {
-                    document.getElementById('logBox').innerHTML = '<div style="color: #888;">Logs cleared...</div>';
-                });
-            }
-            
-            if (copyLogsBtn) {
-                copyLogsBtn.addEventListener('click', function() {
-                    const logBox = document.getElementById('logBox');
-                    const logs = logBox.innerText;
-                    navigator.clipboard.writeText(logs).then(function() {
-                        addLog('Logs copied to clipboard!', 'success');
-                    }).catch(function() {
-                        addLog('Failed to copy logs', 'error');
-                    });
-                });
-            }
-
-            updateConnectionStatus('Ready to send', false);
-        });
-    </script>
-</body>
-</html>
-        `);
     });
 
+    // Bulk messaging page route
+    app.get("/blkmsg", (req, res) => {
+        res.sendFile('test.html', { root: 'public' });
+    });
 
+    // Spreadsheet page route
+    app.get("/spreadsheet", (req, res) => {
+        res.sendFile('spreadsheet.html', { root: 'public' });
+    });
+
+    // Test WhatsApp library access endpoint
+    app.post('/test-whatsapp', async (req, res) => {
+        try {
+            const { phoneNumbers, message } = req.body;
+            let numbersToTest = phoneNumbers || ['+966504693227']; // Default to single number if none provided
+            
+            // No limit on numbers - rate limiting will be handled by delays
+            logger.info('Processing WhatsApp messages', [
+                `Total numbers: ${numbersToTest.length}`,
+                `Rate limiting: 30 seconds between messages`
+            ]);
+            
+            logger.info('Testing WhatsApp library access and sending test messages', [
+                `Numbers to test: ${numbersToTest.length}`,
+                `Numbers: ${numbersToTest.join(', ')}`
+            ]);
+            
+            // Check if client exists
+            if (!globalState.client) {
+                return res.json({
+                    success: false,
+                    error: 'Client not initialized',
+                    message: 'WhatsApp client is not available'
+                });
+            }
+
+            // Check client state
+            const clientReady = globalState.client.info ? true : false;
+            const authenticated = globalState.isAuthenticated;
+            
+            // Get user info if available
+            let userInfo = 'Not available';
+            if (globalState.client.info) {
+                userInfo = `${globalState.client.info.pushname} (${globalState.client.info.wid.user})`;
+            }
+
+            // Test if we can access the sendMessage function
+            const hasSendMessage = typeof globalState.client.sendMessage === 'function';
+            
+            let messageResults = [];
+            let messageStatus = 'Not attempted';
+            
+            // If client is ready and authenticated, try to send test messages
+            if (clientReady && authenticated && hasSendMessage) {
+                // Use custom message or fallback to default
+                let testMessage = message;
+                if (!testMessage || testMessage.trim().length === 0) {
+                    testMessage = `🤖 Test Message from WhatsApp Bot
+📅 Time: ${new Date().toLocaleString()}
+🔢 Random Code: ${Math.floor(Math.random() * 900000) + 100000}
+✅ This is a test message to verify the bot is working!`;
+                } else {
+                    // Replace placeholders in custom message
+                    testMessage = testMessage
+                        .replace(/\[current time\]/gi, new Date().toLocaleString())
+                        .replace(/\[random number\]/gi, Math.floor(Math.random() * 900000) + 100000);
+                }
+                
+                logger.info('Attempting to send test messages', [
+                    `To: ${numbersToTest.join(', ')}`,
+                    `Message length: ${testMessage.length} characters`
+                ]);
+                
+                // Send message to each phone number with rate limiting
+                for (let i = 0; i < numbersToTest.length; i++) {
+                    const phoneNumber = numbersToTest[i];
+                    try {
+                        const chatId = phoneNumber.replace('+', '') + '@c.us';
+                        const result = await globalState.client.sendMessage(chatId, testMessage);
+                        
+                        messageResults.push({
+                            phoneNumber: phoneNumber,
+                            success: true,
+                            messageId: result.id._serialized,
+                            timestamp: result.timestamp,
+                            status: 'Message sent successfully'
+                        });
+                        
+                        logger.success('Test message sent successfully', [
+                            `To: ${phoneNumber}`,
+                            `Message ID: ${result.id._serialized}`,
+                            `Timestamp: ${result.timestamp}`,
+                            `Status: Message delivered to WhatsApp`
+                        ]);
+                        
+                        // Rate limiting: 30 seconds delay between messages to prevent ban
+                        if (i < numbersToTest.length - 1) { // Don't delay after the last message
+                            const delay = 30000; // 30 seconds
+                            logger.info('Rate limiting delay', [
+                                `Waiting ${delay/1000} seconds before next message...`,
+                                `Progress: ${i + 1}/${numbersToTest.length} messages sent`,
+                                `Remaining: ${numbersToTest.length - i - 1} messages`
+                            ]);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                        
+                    } catch (messageError) {
+                        messageResults.push({
+                            phoneNumber: phoneNumber,
+                            success: false,
+                            error: messageError.message,
+                            status: 'Failed to send message'
+                        });
+                        
+                        logger.error('Test message failed', [
+                            `Error: ${messageError.message}`,
+                            `To: ${phoneNumber}`
+                        ]);
+                        
+                        // Even on error, add delay to avoid rapid retries
+                        if (i < numbersToTest.length - 1) {
+                            const delay = Math.floor(Math.random() * 1000) + 2000; // 2-3 seconds
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+                
+                const successCount = messageResults.filter(r => r.success).length;
+                const failCount = messageResults.filter(r => !r.success).length;
+                messageStatus = `Sent to ${successCount}/${numbersToTest.length} numbers (${failCount} failed)`;
+                
+            } else {
+                messageStatus = 'Cannot send messages - client not ready or not authenticated';
+            }
+            
+            logger.success('WhatsApp library access test completed', [
+                `Client Ready: ${clientReady}`,
+                `Authenticated: ${authenticated}`,
+                `Has sendMessage: ${hasSendMessage}`,
+                `User: ${userInfo}`,
+                `Message Status: ${messageStatus}`
+            ]);
+
+            res.json({
+                success: true,
+                status: 'WhatsApp library test completed',
+                clientReady: clientReady,
+                authenticated: authenticated,
+                hasSendMessage: hasSendMessage,
+                userInfo: userInfo,
+                messageStatus: messageStatus,
+                messageResults: messageResults,
+                message: 'WhatsApp library test completed - check message results for details'
+            });
+
+        } catch (error) {
+            logger.error('WhatsApp library access test failed', [error.message]);
+            
+            res.json({
+                success: false,
+                error: error.message,
+                message: 'Failed to access WhatsApp library functions'
+            });
+        }
+    });
+
+    // Check message delivery status endpoint
+    app.get('/check-messages', async (req, res) => {
+        try {
+            if (!globalState.client || !globalState.isAuthenticated) {
+                return res.json({
+                    success: false,
+                    message: 'WhatsApp client not ready'
+                });
+            }
+
+            // Get recent chats to see message status
+            const chats = await globalState.client.getChats();
+            const recentChats = chats.slice(0, 10); // Get last 10 chats
+            
+            const chatInfo = recentChats.map(chat => ({
+                name: chat.name || chat.id.user,
+                phoneNumber: chat.id.user,
+                lastMessage: chat.lastMessage ? {
+                    body: chat.lastMessage.body,
+                    timestamp: chat.lastMessage.timestamp,
+                    fromMe: chat.lastMessage.fromMe
+                } : null,
+                unreadCount: chat.unreadCount
+            }));
+
+            res.json({
+                success: true,
+                recentChats: chatInfo,
+                message: 'Recent chat information retrieved'
+            });
+
+        } catch (error) {
+            logger.error('Failed to check messages', [error.message]);
+            res.json({
+                success: false,
+                error: error.message,
+                message: 'Failed to retrieve chat information'
+            });
+        }
+    });
+
+    // Phone number management endpoints
+    app.post('/api/contacts', (req, res) => {
+        try {
+            const { phone, name, source } = req.body;
+            const result = phoneDB.addContact(phone, name, source);
+            res.json(result);
+        } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
+
+    app.post('/api/contacts/bulk', (req, res) => {
+        try {
+            const { contacts } = req.body;
+            const results = phoneDB.addContacts(contacts);
+            res.json({ success: true, results });
+        } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/contacts', (req, res) => {
+        try {
+            const { limit = 100, source } = req.query;
+            let contacts;
+            if (source) {
+                contacts = phoneDB.getContactsBySource(source);
+            } else {
+                contacts = phoneDB.getContacts(parseInt(limit));
+            }
+            res.json({ success: true, contacts });
+        } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/contacts/export', (req, res) => {
+        try {
+            const contacts = phoneDB.getContacts();
+            const csv = 'Phone,Name,Source,Added At\n' + 
+                contacts.map(c => `${c.phone},${c.name},${c.source},${c.addedAt}`).join('\n');
+            
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', 'attachment; filename=contacts.csv');
+            res.send(csv);
+        } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
 
     // Individual message endpoint (for backward compatibility)
     app.post('/send-bulk-message', async (req, res) => {
@@ -1171,108 +1019,6 @@ const createExpressServer = () => {
 
 
 
-    async function processBulkMessagesWithWebSocket(ws, phoneNumbers, message) {
-        let successCount = 0;
-        let failCount = 0;
-        const totalCount = phoneNumbers.length;
-        
-        // Send initial log
-        ws.send(JSON.stringify({
-            type: 'bulk_log',
-            message: 'Starting bulk messaging process...',
-            logType: 'info'
-        }));
-        
-        ws.send(JSON.stringify({
-            type: 'bulk_log',
-            message: 'Total numbers: ' + totalCount,
-            logType: 'info'
-        }));
-
-        for (let i = 0; i < phoneNumbers.length; i++) {
-            const phone = phoneNumbers[i];
-            
-            try {
-                // Format phone number for WhatsApp - handle international numbers
-                let formattedPhone = phone.trim();
-                
-                // Remove common prefixes and format for WhatsApp
-                if (formattedPhone.startsWith('+')) {
-                    formattedPhone = formattedPhone.substring(1) + '@c.us';
-                } else if (formattedPhone.startsWith('00')) {
-                    formattedPhone = formattedPhone.substring(2) + '@c.us';
-                } else if (formattedPhone.startsWith('0')) {
-                    formattedPhone = formattedPhone.substring(1) + '@c.us';
-                } else {
-                    formattedPhone = formattedPhone + '@c.us';
-                }
-
-                // Send log before sending
-                ws.send(JSON.stringify({
-                    type: 'bulk_log',
-                    message: 'Sending to ' + phone + '...',
-                    logType: 'info'
-                }));
-
-                // Send message
-                await globalState.client.sendMessage(formattedPhone, message);
-                successCount++;
-                
-                // Send success log
-                ws.send(JSON.stringify({
-                    type: 'bulk_log',
-                    message: phone + ' sent successfully',
-                    logType: 'success'
-                }));
-
-            } catch (error) {
-                failCount++;
-                
-                // Send error log
-                ws.send(JSON.stringify({
-                    type: 'bulk_log',
-                    message: 'Failed to send to ' + phone + ': ' + error.message,
-                    logType: 'error'
-                }));
-            }
-
-            // Send progress update
-            ws.send(JSON.stringify({
-                type: 'bulk_progress',
-                total: totalCount,
-                current: i + 1,
-                success: successCount,
-                failed: failCount,
-                progress: Math.round(((i + 1) / totalCount) * 100)
-            }));
-
-            // Rate limiting - wait 1 second between messages
-            if (i < totalCount - 1) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-
-        // Send completion message
-        ws.send(JSON.stringify({
-            type: 'bulk_complete',
-            total: totalCount,
-            success: successCount,
-            failed: failCount
-        }));
-
-        // Send final log
-        ws.send(JSON.stringify({
-            type: 'bulk_log',
-            message: 'Bulk messaging completed!',
-            logType: 'success'
-        }));
-
-        ws.send(JSON.stringify({
-            type: 'bulk_log',
-            message: '📊 Final Results: ' + successCount + ' success, ' + failCount + ' failed',
-            logType: 'info'
-        }));
-    }
 
 
 
@@ -1378,8 +1124,12 @@ const startApplication = async () => {
                             logType: 'success'
                         }));
                         
-                        // Start bulk messaging process
-                        await processBulkMessagesWithWebSocket(ws, message.phoneNumbers, message.message);
+                        // Bulk messaging functionality removed
+                        ws.send(JSON.stringify({
+                            type: 'bulk_log',
+                            message: 'Bulk messaging functionality has been removed',
+                            logType: 'error'
+                        }));
                     }
                 } catch (error) {
                     logger.error('WebSocket message error', [error.message]);
@@ -1402,6 +1152,7 @@ const startApplication = async () => {
         
         // Store WebSocket server in global state for bulk messaging updates
         globalState.wss = wss;
+        
         
         server.listen(PORT, () => {
             logger.success('Server started successfully!', [

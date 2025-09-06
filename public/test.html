@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Message Sender - Bot Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 600px;
+        }
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #333;
+            min-height: 30px;
+            text-align: left;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav style="margin-bottom: 30px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">
+            <a href="/" style="color: #667eea; text-decoration: none; font-weight: bold; margin-right: 20px;">🏠 Dashboard</a>
+            <a href="/spreadsheet" style="color: #667eea; text-decoration: none; font-weight: bold;">📊 Spreadsheet</a>
+        </nav>
+        
+        <h1>📤 WhatsApp Message Sender</h1>
+        <p style="color: #666; margin-bottom: 30px;">Send messages to contacts from the spreadsheet with rate limiting for safe operation</p>
+        
+        <button id="testedBtn" onclick="testWhatsAppAccess()">Send Message</button>
+        
+        
+        <div style="margin-top: 20px;">
+            <label for="messageText" style="display: block; margin-bottom: 10px; font-weight: bold;">Message to Send:</label>
+            <textarea id="messageText" rows="4" placeholder="Enter your message here...">🤖 Test Message from WhatsApp Bot
+📅 Time: [current time]
+🔢 Random Code: [random number]
+✅ This is a test message to verify the bot is working!</textarea>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+
+        async function testWhatsAppAccess() {
+            const button = document.getElementById('testedBtn');
+            const result = document.getElementById('result');
+            const messageTextarea = document.getElementById('messageText');
+            
+            // Get phone numbers from spreadsheet
+            let phoneNumbers = [];
+            try {
+                const response = await fetch('/api/contacts');
+                const data = await response.json();
+                
+                if (data.success && data.contacts) {
+                    phoneNumbers = data.contacts
+                        .map(contact => contact.phone)
+                        .filter(phone => phone && phone.startsWith('+'));
+                }
+            } catch (error) {
+                console.error('Error fetching contacts:', error);
+            }
+            
+            // Get message from textarea
+            let message = messageTextarea.value.trim();
+            
+            console.log('Phone numbers from spreadsheet:', phoneNumbers);
+            console.log('Message to send:', message);
+            
+            if (phoneNumbers.length === 0) {
+                result.innerHTML = '<div class="error">❌ No phone numbers found in spreadsheet. Please add contacts in the <a href="/spreadsheet" style="color: #667eea;">📊 Spreadsheet</a> first.</div>';
+                return;
+            }
+            
+            // No limit on phone numbers - rate limiting handled by server
+            
+            if (message.length === 0) {
+                result.innerHTML = '<div class="error">❌ Please enter a message to send</div>';
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = 'Testing...';
+            result.innerHTML = '<div class="info">🔄 Testing WhatsApp library access and sending messages to ' + phoneNumbers.length + ' numbers...</div>';
+            
+            try {
+                const response = await fetch('/test-whatsapp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phoneNumbers: phoneNumbers,
+                        message: message
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let messageStatusHtml = '';
+                    if (data.messageResults && data.messageResults.length > 0) {
+                        messageStatusHtml = '<div><strong>📱 Message Results (' + data.messageResults.length + ' numbers):</strong></div>';
+                        
+                        data.messageResults.forEach((result, index) => {
+                            if (result.success) {
+                                messageStatusHtml += 
+                                    '<div style="margin: 10px 0; padding: 10px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">' +
+                                        '<div class="success">✅ ' + result.phoneNumber + ' - Message Sent Successfully!</div>' +
+                                        '<div><strong>Message ID:</strong> ' + result.messageId + '</div>' +
+                                        '<div><strong>Timestamp:</strong> ' + new Date(result.timestamp * 1000).toLocaleString() + '</div>' +
+                                    '</div>';
+                            } else {
+                                messageStatusHtml += 
+                                    '<div style="margin: 10px 0; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">' +
+                                        '<div class="error">❌ ' + result.phoneNumber + ' - Failed to Send</div>' +
+                                        '<div><strong>Error:</strong> ' + result.error + '</div>' +
+                                    '</div>';
+                            }
+                        });
+                        
+                        const successCount = data.messageResults.filter(r => r.success).length;
+                        const failCount = data.messageResults.filter(r => !r.success).length;
+                        messageStatusHtml += 
+                            '<div style="margin-top: 15px; padding: 10px; background: #e2e3e5; border-radius: 4px;">' +
+                                '<strong>Summary:</strong> ' + successCount + ' successful, ' + failCount + ' failed out of ' + data.messageResults.length + ' total' +
+                            '</div>';
+                    } else {
+                        messageStatusHtml = '<div class="info">ℹ️ ' + data.messageStatus + '</div>';
+                    }
+                    
+                    result.innerHTML = 
+                        '<div class="success">✅ WhatsApp Library Test Results:</div>' +
+                        '<div><strong>Status:</strong> ' + data.status + '</div>' +
+                        '<div><strong>Client Ready:</strong> ' + (data.clientReady ? 'Yes' : 'No') + '</div>' +
+                        '<div><strong>Authentication:</strong> ' + (data.authenticated ? 'Yes' : 'No') + '</div>' +
+                        '<div><strong>User Info:</strong> ' + (data.userInfo || 'Not available') + '</div>' +
+                        '<div><strong>Has sendMessage:</strong> ' + (data.hasSendMessage ? 'Yes' : 'No') + '</div>' +
+                        '<hr style="margin: 15px 0; border: 1px solid #ddd;">' +
+                        messageStatusHtml;
+                } else {
+                    result.innerHTML = 
+                        '<div class="error">❌ WhatsApp Library Access Failed:</div>' +
+                        '<div><strong>Error:</strong> ' + data.error + '</div>' +
+                        '<div><strong>Message:</strong> ' + data.message + '</div>';
+                }
+            } catch (error) {
+                result.innerHTML = 
+                    '<div class="error">❌ Connection Error:</div>' +
+                    '<div><strong>Error:</strong> ' + error.message + '</div>' +
+                    '<div><strong>Message:</strong> Failed to connect to server</div>';
+            }
+            
+            button.disabled = false;
+            button.textContent = 'Send Message';
+        }
+    </script>
+</body>
+</html>

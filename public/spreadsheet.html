@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Numbers Spreadsheet - Bot Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .nav {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+        .spreadsheet-container {
+            padding: 20px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f8f9fa;
+        }
+        .spreadsheet {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .spreadsheet th,
+        .spreadsheet td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .spreadsheet th {
+            background: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .spreadsheet input {
+            width: 100%;
+            border: none;
+            padding: 4px;
+            font-size: 14px;
+        }
+        .spreadsheet input:focus {
+            outline: 2px solid #667eea;
+            background: #f0f8ff;
+        }
+        .phone-input {
+            font-family: monospace;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: black;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .log-section {
+            margin-top: 30px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .log-section h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background: #f8f9fa;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            border-left: 4px solid #ccc;
+        }
+        
+        .log-entry.log-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border-left-color: #17a2b8;
+        }
+        
+        .log-entry.log-success {
+            background-color: #d4edda;
+            color: #155724;
+            border-left-color: #28a745;
+        }
+        
+        .log-entry.log-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-left-color: #dc3545;
+        }
+        
+        .log-entry.log-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border-left-color: #ffc107;
+        }
+        
+        .log-time {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .log-message {
+            word-break: break-word;
+        }
+        
+        /* Custom scrollbar styling */
+        .spreadsheet-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .spreadsheet-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .spreadsheet-container::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+        
+        .spreadsheet-container::-webkit-scrollbar-thumb:hover {
+            background: #5a6fd8;
+        }
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .instructions h4 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Phone Numbers Spreadsheet</h1>
+            <p>Add phone numbers directly in the spreadsheet below</p>
+        </div>
+        
+        <div class="nav">
+            <a href="/">🏠 Dashboard</a>
+            <a href="/spreadsheet">📊 Spreadsheet</a>
+        </div>
+        
+        <div class="instructions">
+            <h4>📋 Instructions:</h4>
+            <ul>
+                <li><strong>Phone:</strong> Enter phone numbers with country code (e.g., +966123456789)</li>
+                <li><strong>Name:</strong> Enter contact name (optional)</li>
+                <li><strong>Source:</strong> Where you got this number (e.g., website, referral, event)</li>
+                <li><strong>Notes:</strong> Any additional notes (optional)</li>
+                <li>Click "Add Row" to add more contacts</li>
+                <li>Click "Save Data" to save your contacts to the database</li>
+                <li>Click "Send Messages" when ready to send</li>
+            </ul>
+        </div>
+        
+        <div class="controls">
+            <button class="btn btn-primary" onclick="addRow()">➕ Add Row</button>
+            <button class="btn btn-warning" onclick="clearAll()">🗑️ Clear All</button>
+            <button class="btn btn-info" onclick="saveData()">💾 Save Data</button>
+            <button class="btn btn-success" onclick="sendMessages()">📤 Send Messages</button>
+            <button class="btn btn-primary" onclick="exportCSV()">📊 Export CSV</button>
+            <button class="btn btn-secondary" onclick="clearLog()">🗑️ Clear Log</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        
+        <div class="spreadsheet-container">
+            <table class="spreadsheet" id="spreadsheet">
+                <thead>
+                    <tr>
+                        <th style="width: 200px;">Phone</th>
+                        <th style="width: 150px;">Name</th>
+                        <th style="width: 120px;">Source</th>
+                        <th style="width: 200px;">Notes</th>
+                        <th style="width: 80px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="spreadsheetBody">
+                    <tr>
+                        <td><input type="text" class="phone-input" placeholder="+966123456789" value="+966502391798"></td>
+                        <td><input type="text" placeholder="John Doe" value="John Doe"></td>
+                        <td><input type="text" placeholder="website" value="website"></td>
+                        <td><input type="text" placeholder="Interested customer" value="Interested in product A"></td>
+                        <td><button class="btn btn-danger" onclick="deleteRow(this)" style="padding: 5px 10px; font-size: 12px;">🗑️</button></td>
+                    </tr>
+                    <tr>
+                        <td><input type="text" class="phone-input" placeholder="+966123456789" value="+966504693227"></td>
+                        <td><input type="text" placeholder="Jane Smith" value="Jane Smith"></td>
+                        <td><input type="text" placeholder="referral" value="referral"></td>
+                        <td><input type="text" placeholder="From friend" value="From friend recommendation"></td>
+                        <td><button class="btn btn-danger" onclick="deleteRow(this)" style="padding: 5px 10px; font-size: 12px;">🗑️</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Sending Log Section -->
+        <div class="log-section">
+            <h3>📋 Sending Log</h3>
+            <div id="sendingLog" class="log-container">
+                <div class="log-entry log-info">
+                    <span class="log-time">Ready to send messages...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function addRow() {
+            const tbody = document.getElementById('spreadsheetBody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" class="phone-input" placeholder="+966123456789"></td>
+                <td><input type="text" placeholder="Name"></td>
+                <td><input type="text" placeholder="Source"></td>
+                <td><input type="text" placeholder="Notes"></td>
+                <td><button class="btn btn-danger" onclick="deleteRow(this)" style="padding: 5px 10px; font-size: 12px;">🗑️</button></td>
+            `;
+            // Insert at the beginning (top) instead of append (bottom)
+            tbody.insertBefore(newRow, tbody.firstChild);
+            
+            // Focus on the phone input of the new row
+            const phoneInput = newRow.querySelector('.phone-input');
+            phoneInput.focus();
+            
+            showStatus('New row added at the top!', 'success');
+        }
+
+        function deleteRow(button) {
+            if (confirm('Are you sure you want to delete this row?')) {
+                button.closest('tr').remove();
+                showStatus('Row deleted!', 'success');
+            }
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                const inputs = document.querySelectorAll('#spreadsheetBody input');
+                inputs.forEach(input => input.value = '');
+                showStatus('All data cleared!', 'success');
+            }
+        }
+
+        function getSpreadsheetData() {
+            const rows = document.querySelectorAll('#spreadsheetBody tr');
+            const data = [];
+            
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                const phone = inputs[0].value.trim();
+                
+                if (phone) {
+                    data.push({
+                        phone: phone,
+                        name: inputs[1].value.trim(),
+                        source: inputs[2].value.trim(),
+                        notes: inputs[3].value.trim()
+                    });
+                }
+            });
+            
+            return data;
+        }
+
+        function validateData(data) {
+            const errors = [];
+            
+            if (data.length === 0) {
+                errors.push('No phone numbers entered');
+                return errors;
+            }
+            
+            
+            data.forEach((row, index) => {
+                if (!row.phone) {
+                    errors.push(`Row ${index + 1}: Phone number is required`);
+                } else if (!row.phone.startsWith('+') && !/^\d/.test(row.phone)) {
+                    errors.push(`Row ${index + 1}: Phone number should start with + or country code`);
+                }
+            });
+            
+            return errors;
+        }
+        
+        function calculateSendingTime(phoneCount) {
+            // 30 seconds between each message to prevent ban
+            const secondsPerMessage = 30;
+            const totalSeconds = phoneCount * secondsPerMessage;
+            
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            let timeString = '';
+            if (hours > 0) timeString += `${hours}h `;
+            if (minutes > 0) timeString += `${minutes}m `;
+            if (seconds > 0) timeString += `${seconds}s`;
+            
+            return {
+                totalSeconds: totalSeconds,
+                formatted: timeString.trim(),
+                perMessage: secondsPerMessage
+            };
+        }
+
+        async function sendMessages() {
+            const data = getSpreadsheetData();
+            const errors = validateData(data);
+            
+            if (errors.length > 0) {
+                addLogEntry('❌ Validation errors: ' + errors.join(', '), 'error');
+                showStatus('Errors: ' + errors.join(', '), 'error');
+                return;
+            }
+            
+            addLogEntry('🚀 Starting message sending process...', 'info');
+            addLogEntry(`📊 Found ${data.length} contacts to process`, 'info');
+            
+            // Calculate and display estimated time
+            let timeEstimate = calculateSendingTime(data.length);
+            addLogEntry(`⏱️ Estimated time: ${timeEstimate.formatted} (${timeEstimate.perMessage}s between messages)`, 'info');
+            addLogEntry(`🛡️ Rate limiting: ${timeEstimate.perMessage} seconds between messages to prevent ban`, 'info');
+            
+            // Save contacts to database first
+            addLogEntry('💾 Saving contacts to database...', 'info');
+            try {
+                const saveResponse = await fetch('/api/contacts/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contacts: data.map(row => ({
+                            phone: row.phone,
+                            name: row.name,
+                            source: row.source || 'spreadsheet'
+                        }))
+                    })
+                });
+                
+                const saveResult = await saveResponse.json();
+                if (!saveResult.success) {
+                    addLogEntry('❌ Error saving contacts: ' + saveResult.error, 'error');
+                    showStatus('Error saving contacts: ' + saveResult.error, 'error');
+                    return;
+                }
+                addLogEntry('✅ Contacts saved to database successfully', 'success');
+            } catch (error) {
+                addLogEntry('❌ Error saving contacts: ' + error.message, 'error');
+                showStatus('Error saving contacts: ' + error.message, 'error');
+                return;
+            }
+            
+            const phoneNumbers = data.map(row => row.phone);
+            
+            // Show time estimate confirmation
+            timeEstimate = calculateSendingTime(phoneNumbers.length);
+            const confirmMessage = `You are about to send messages to ${phoneNumbers.length} contacts.\n\n⏱️ Estimated time: ${timeEstimate.formatted}\n🛡️ Rate limiting: ${timeEstimate.perMessage} seconds between messages\n\nThis will take a while to prevent WhatsApp bans. Continue?`;
+            
+            if (!confirm(confirmMessage)) {
+                addLogEntry('❌ Message sending cancelled by user', 'warning');
+                showStatus('Message sending cancelled', 'warning');
+                return;
+            }
+            
+            const message = prompt('Enter the message to send:', '🤖 Test Message from WhatsApp Bot\n📅 Time: [current time]\n🔢 Random Code: [random number]\n✅ This is a test message to verify the bot is working!');
+            
+            if (!message) {
+                addLogEntry('❌ No message provided, operation cancelled', 'warning');
+                showStatus('Message is required', 'error');
+                return;
+            }
+            
+            addLogEntry('📝 Message prepared: ' + message.substring(0, 50) + (message.length > 50 ? '...' : ''), 'info');
+            addLogEntry('📤 Sending messages to ' + phoneNumbers.length + ' contacts...', 'info');
+            
+            // Log each phone number being sent to
+            phoneNumbers.forEach((phone, index) => {
+                addLogEntry(`📱 [${index + 1}/${phoneNumbers.length}] Preparing to send to: ${phone}`, 'info');
+            });
+            
+            showStatus('Sending messages...', 'success');
+            
+            try {
+                const response = await fetch('/test-whatsapp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phoneNumbers: phoneNumbers,
+                        message: message
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLogEntry('✅ All messages processed successfully!', 'success');
+                    
+                    if (result.messageResults) {
+                        const successCount = result.messageResults.filter(r => r.success).length;
+                        const failCount = result.messageResults.filter(r => !r.success).length;
+                        
+                        addLogEntry(`📊 Final Results: ${successCount} successful, ${failCount} failed`, 'info');
+                        
+                        // Log individual results
+                        result.messageResults.forEach((msgResult, index) => {
+                            const status = msgResult.success ? '✅' : '❌';
+                            const phone = phoneNumbers[index] || 'Unknown';
+                            const details = msgResult.success ? 'Sent successfully' : (msgResult.error || 'Failed to send');
+                            addLogEntry(`${status} ${phone}: ${details}`, msgResult.success ? 'success' : 'error');
+                        });
+                    }
+                    
+                    let statusMessage = `✅ Messages sent successfully!\n`;
+                    if (result.messageResults) {
+                        const successCount = result.messageResults.filter(r => r.success).length;
+                        const failCount = result.messageResults.filter(r => !r.success).length;
+                        statusMessage += `📊 Results: ${successCount} successful, ${failCount} failed`;
+                    }
+                    showStatus(statusMessage, 'success');
+                } else {
+                    addLogEntry('❌ Server error: ' + result.message, 'error');
+                    showStatus('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                addLogEntry('❌ Connection error: ' + error.message, 'error');
+                showStatus('Connection error: ' + error.message, 'error');
+            }
+        }
+
+        function exportCSV() {
+            const data = getSpreadsheetData();
+            
+            if (data.length === 0) {
+                showStatus('No data to export', 'error');
+                return;
+            }
+            
+            let csv = 'Phone,Name,Source,Notes\n';
+            data.forEach(row => {
+                csv += `"${row.phone}","${row.name}","${row.source}","${row.notes}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'phone_numbers.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            showStatus('CSV exported successfully!', 'success');
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+        
+        function addLogEntry(message, type = 'info') {
+            const logContainer = document.getElementById('sendingLog');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            
+            const time = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `<span class="log-time">[${time}]</span><span class="log-message">${message}</span>`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLog() {
+            const logContainer = document.getElementById('sendingLog');
+            logContainer.innerHTML = '<div class="log-entry log-info"><span class="log-time">[Ready]</span><span class="log-message">Log cleared. Ready to send messages...</span></div>';
+        }
+        
+        async function saveData() {
+            const data = getSpreadsheetData();
+            const errors = validateData(data);
+            
+            if (errors.length > 0) {
+                addLogEntry('❌ Cannot save data with validation errors: ' + errors.join(', '), 'error');
+                showStatus('Cannot save data with errors: ' + errors.join(', '), 'error');
+                return;
+            }
+            
+            if (data.length === 0) {
+                addLogEntry('⚠️ No data to save', 'warning');
+                showStatus('No data to save', 'warning');
+                return;
+            }
+            
+            addLogEntry('💾 Saving data to database...', 'info');
+            
+            try {
+                const response = await fetch('/api/contacts/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contacts: data.map(row => ({
+                            phone: row.phone,
+                            name: row.name,
+                            source: row.source || 'spreadsheet',
+                            notes: row.notes || ''
+                        }))
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLogEntry(`✅ Successfully saved ${data.length} contacts to database`, 'success');
+                    showStatus(`Successfully saved ${data.length} contacts!`, 'success');
+                } else {
+                    addLogEntry('❌ Error saving data: ' + result.error, 'error');
+                    showStatus('Error saving data: ' + result.error, 'error');
+                }
+            } catch (error) {
+                addLogEntry('❌ Connection error while saving: ' + error.message, 'error');
+                showStatus('Connection error: ' + error.message, 'error');
+            }
+        }
+
+        // Load existing data from database
+        async function loadExistingData() {
+            try {
+                const response = await fetch('/api/contacts');
+                const result = await response.json();
+                
+                if (result.success && result.contacts && result.contacts.length > 0) {
+                    addLogEntry(`📥 Loading ${result.contacts.length} existing contacts from database...`, 'info');
+                    
+                    // Clear existing rows (except header)
+                    const tbody = document.getElementById('spreadsheetBody');
+                    tbody.innerHTML = '';
+                    
+                    // Add each contact as a new row
+                    result.contacts.forEach(contact => {
+                        const newRow = document.createElement('tr');
+                        newRow.innerHTML = `
+                            <td><input type="text" placeholder="+966123456789" value="${contact.phone || ''}"></td>
+                            <td><input type="text" placeholder="John Doe" value="${contact.name || ''}"></td>
+                            <td><input type="text" placeholder="website" value="${contact.source || ''}"></td>
+                            <td><input type="text" placeholder="Notes" value="${contact.notes || ''}"></td>
+                            <td><button class="btn btn-danger" onclick="deleteRow(this)" style="padding: 5px 10px; font-size: 12px;">🗑️</button></td>
+                        `;
+                        tbody.appendChild(newRow);
+                    });
+                    
+                    addLogEntry(`✅ Loaded ${result.contacts.length} contacts successfully`, 'success');
+                } else {
+                    addLogEntry('📝 No existing contacts found, starting with empty spreadsheet', 'info');
+                }
+            } catch (error) {
+                addLogEntry('⚠️ Could not load existing data: ' + error.message, 'warning');
+                console.error('Error loading existing data:', error);
+            }
+        }
+        
+        // Auto-save functionality (optional)
+        function autoSave() {
+            const data = getSpreadsheetData();
+            localStorage.setItem('spreadsheetData', JSON.stringify(data));
+        }
+
+        // Load saved data on page load
+        window.onload = function() {
+            // Load existing data from database first
+            loadExistingData();
+            
+            const savedData = localStorage.getItem('spreadsheetData');
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    // You could restore the data here if needed
+                } catch (e) {
+                    console.log('No saved data found');
+                }
+            }
+            
+            // Add auto-save on input change
+            const inputs = document.querySelectorAll('#spreadsheetBody input');
+            inputs.forEach(input => {
+                input.addEventListener('input', autoSave);
+            });
+        };
+    </script>
+</body>
+</html>

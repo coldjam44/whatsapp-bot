@@ -4,33 +4,104 @@ export default function registerMessageHandlers(client) {
     let userStates = {};
     let userData = [];
     let completedUsers = [];
+    let cachedOffers = null;
+    let lastOffersFetch = 0;
+    const OFFERS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
   
     // Regex for numbers (Arabic + English)
     const numberRegex = /^[0-9\u0660-\u0669]+$/;
   
+    // API Configuration
+    const API_BASE_URL = 'https://realestate.azsystems.tech';
+    
+    // Fetch offers from API
+    const fetchOffers = async () => {
+        try {
+            const now = Date.now();
+            
+            // Return cached offers if still valid
+            if (cachedOffers && (now - lastOffersFetch) < OFFERS_CACHE_DURATION) {
+                console.log('📋 Using cached offers');
+                return cachedOffers;
+            }
+            
+            console.log('🌐 Fetching fresh offers from API...');
+            const response = await fetch(`${API_BASE_URL}/api/bot/offers`);
+            
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.data && Array.isArray(data.data)) {
+                cachedOffers = data.data;
+                lastOffersFetch = now;
+                console.log(`✅ Fetched ${data.count} offers from API`);
+                return cachedOffers;
+            } else {
+                throw new Error('Invalid API response format');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error fetching offers from API:', error.message);
+            
+            // Return fallback offers if API fails
+            return [
+                {
+                    display_text_ar: "عرض احتياطي - فيلا راقية 500م²",
+                    display_text_en: "Fallback Offer - Luxury Villa 500m²"
+                },
+                {
+                    display_text_ar: "عرض احتياطي - شقة فاخرة مطلة على البحر",
+                    display_text_en: "Fallback Offer - Luxury Sea View Apartment"
+                }
+            ];
+        }
+    };
+    
+    // Generate offers text based on language and fetched data
+    const generateOffersText = (offers, lang) => {
+        if (!offers || offers.length === 0) {
+            return lang === 'ar' ? "عذراً، لا توجد عروض متاحة حالياً" : "Sorry, no offers available at the moment";
+        }
+        
+        let offersText = lang === 'ar' ? "القائمة:\n" : "List:\n";
+        
+        offers.forEach((offer, index) => {
+            const emoji = index === 0 ? "💎" : index === 1 ? "🌊" : "🏢";
+            const offerText = lang === 'ar' ? offer.display_text_ar : offer.display_text_en;
+            offersText += `${index + 1}️⃣ عرض رقم ${index + 1}: ${offerText} ${emoji}\n`;
+        });
+        
+        offersText += lang === 'ar' ? "أرسل أي رقم لاختيار العرض" : "Send any number to choose an offer";
+        
+        return offersText;
+    };
+  
     // Language-specific texts/templates
     const texts = {
         ar: {
-            offers: "القائمة:\n1️⃣ عرض رقم 1: فيلا راقية 500م² 💎\n2️⃣ عرض رقم 2: شقة فاخرة مطلة على البحر 🌊\nأرسل أي رقم لاختيار العرض",
-            askName: (num) => `تمام ✅ اخترت عرض رقم ${num}\nبرجاء كتابة اسمك فقط`,
+            askName: (num, offerText) => `تمام ✅ اخترت عرض رقم ${num}\n${offerText}\nبرجاء كتابة اسمك فقط`,
             askPhone: (name) => `شكرًا لك ${name}.\nالآن أرسل رقم جوالك`,
             thank: "شكرًا لك 🌹 سيتم التواصل معك قريبًا",
             invalid: "أرسل رقم لعرض العروض",
             welcome: "مرحبا بك في العقارية 🌟\nنقدم عروض مميزة\nأرسل أي رقم لعرض العروض",
             welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
             invalidNumber: "❌ الرجاء إدخال رقم صالح",
-            validNumber: "أرسل رقم صالح"
+            validNumber: "أرسل رقم صالح",
+            loadingOffers: "⏳ جاري تحميل العروض..."
         },
         en: {
-            offers: "List:\n1️⃣ Offer 1: Villa 500m² 💎\n2️⃣ Offer 2: Luxury apartment 🌊\nSend any number to choose",
-            askName: (num) => `Great ✅ You chose Offer ${num}\nPlease enter your name`,
+            askName: (num, offerText) => `Great ✅ You chose Offer ${num}\n${offerText}\nPlease enter your name`,
             askPhone: (name) => `Thank you ${name}.\nNow send your phone number`,
             thank: "Thank you 🌹 Our sales team will contact you",
             invalid: "Send a number to view offers",
             welcome: "مرحبا بك في العقارية 🌟\nنقدم عروض مميزة\nأرسل أي رقم لعرض العروض",
             welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
             invalidNumber: "❌ Please enter a valid number",
-            validNumber: "Send a valid number"
+            validNumber: "Send a valid number",
+            loadingOffers: "⏳ Loading offers..."
         }
     };
 
@@ -110,7 +181,18 @@ export default function registerMessageHandlers(client) {
                 if (numberRegex.test(text)) {
                     userStates[from].step = 'CHOOSE_OFFER';
                     console.log(`📋 User ${from} proceeding to offers`);
-                    return await message.reply(texts[lang].offers);
+                    
+                    // Send loading message first
+                    await message.reply(texts[lang].loadingOffers);
+                    
+                    // Fetch offers from API
+                    const offers = await fetchOffers();
+                    const offersText = generateOffersText(offers, lang);
+                    
+                    // Store offers in user state for later reference
+                    userStates[from].offers = offers;
+                    
+                    return await message.reply(offersText);
                 }
                 console.log(`❌ User ${from} invalid input in WELCOME step: "${text}"`);
                 return await message.reply(texts[lang].invalid);
@@ -120,10 +202,23 @@ export default function registerMessageHandlers(client) {
             if (userStates[from].step === 'CHOOSE_OFFER') {
                 if (numberRegex.test(text)) {
                     const offerNum = convertArabicNumbers(text);
-                    userStates[from].step = 'ASK_NAME';
-                    userStates[from].offer = offerNum;
-                    console.log(`🏠 User ${from} chose offer ${offerNum}`);
-                    return await message.reply(texts[lang].askName(offerNum));
+                    const offerIndex = parseInt(offerNum) - 1;
+                    
+                    // Validate offer selection
+                    if (offerIndex >= 0 && offerIndex < userStates[from].offers.length) {
+                        const selectedOffer = userStates[from].offers[offerIndex];
+                        const offerText = lang === 'ar' ? selectedOffer.display_text_ar : selectedOffer.display_text_en;
+                        
+                        userStates[from].step = 'ASK_NAME';
+                        userStates[from].offer = offerNum;
+                        userStates[from].selectedOfferText = offerText;
+                        
+                        console.log(`🏠 User ${from} chose offer ${offerNum}: ${offerText}`);
+                        return await message.reply(texts[lang].askName(offerNum, offerText));
+                    } else {
+                        console.log(`❌ User ${from} chose invalid offer number: ${offerNum}`);
+                        return await message.reply(texts[lang].validNumber);
+                    }
                 }
                 console.log(`❌ User ${from} invalid input in CHOOSE_OFFER step: "${text}"`);
                 return await message.reply(texts[lang].validNumber);
@@ -139,11 +234,12 @@ export default function registerMessageHandlers(client) {
 
             // Ask for phone number
             if (userStates[from].step === 'ASK_PHONE') {
-                // Store user data
+                // Store user data with offer details
                 const userDataEntry = {
                     from,
                     lang,
                     offer: userStates[from].offer,
+                    selectedOfferText: userStates[from].selectedOfferText,
                     name: userStates[from].name,
                     phone: text,
                     timestamp: new Date().toISOString()

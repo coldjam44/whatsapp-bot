@@ -1,0 +1,29 @@
+EXCEL INSTRUCTIONS - How to Prevent Scientific Notation
+
+Method 1: Format Column as Text BEFORE entering data
+1. Select the entire Phone column (Column A)
+2. Right-click and choose "Format Cells"
+3. Select "Text" format
+4. Click OK
+5. Now paste your phone numbers - they will stay as text
+
+Method 2: Use Single Quote Before Each Number
+1. Type a single quote (') before each phone number
+2. Example: '966502391798
+3. Excel will treat it as text and not convert to scientific notation
+
+Method 3: Import as Text
+1. Go to Data > From Text/CSV
+2. Select your file
+3. In the preview, click on the Phone column
+4. Change data type to "Text"
+5. Click Load
+
+Method 4: Use Paste Special
+1. Copy your phone numbers
+2. Select the cell where you want to paste
+3. Right-click and choose "Paste Special"
+4. Select "Text" format
+5. Click OK
+
+RECOMMENDED: Use Method 1 (Format as Text) before entering any data!
