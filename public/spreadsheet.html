@@ -322,6 +322,9 @@
         <div class="controls">
             <button class="btn btn-primary" onclick="sendMessages()">📤 Send Messages</button>
             <button class="btn btn-secondary" onclick="clearLog()">🗑️ Clear Log</button>
+            <button class="btn btn-info" onclick="downloadTemplate()">📥 Download Template</button>
+            <input type="file" id="templateUpload" accept=".xlsx,.csv" style="display: none;" onchange="uploadTemplate(this)">
+            <button class="btn btn-warning" onclick="document.getElementById('templateUpload').click()">📤 Upload Number Template</button>
         </div>
         
         <div id="status" class="status"></div>
@@ -763,6 +766,60 @@
             const logContainer = document.getElementById('sendingLog');
             logContainer.innerHTML = '<div class="log-entry log-info"><span class="log-time">[Ready]</span><span class="log-message">Log cleared. Ready to send messages...</span></div>';
         }
+
+        // Download Template
+        function downloadTemplate() {
+            addLogEntry('📥 Downloading Excel template...', 'info');
+            
+            // Create a link to download the template file
+            const link = document.createElement('a');
+            link.href = '/template.xlsx';
+            link.download = 'contacts_template.xlsx';
+            link.style.display = 'none';
+            
+            // Add to page, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            addLogEntry('✅ Excel template downloaded successfully!', 'success');
+            showStatus('Excel template downloaded!', 'success');
+        }
+
+        // Upload Template
+        function uploadTemplate(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            addLogEntry(`📤 Uploading template: ${file.name}...`, 'info');
+            
+            const formData = new FormData();
+            formData.append('template', file);
+            
+            fetch('/api/upload-template', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogEntry(`✅ Template uploaded successfully! Added ${data.count} contacts`, 'success');
+                    showStatus(`Template uploaded! Added ${data.count} contacts`, 'success');
+                    loadContacts(); // Refresh the table
+                } else {
+                    addLogEntry(`❌ Upload failed: ${data.error}`, 'error');
+                    showStatus(`Upload failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                addLogEntry(`❌ Upload error: ${error.message}`, 'error');
+                showStatus(`Upload error: ${error.message}`, 'error');
+            });
+            
+            // Clear the input
+            input.value = '';
+        }
+
 
         // Send messages to all contacts
         async function sendMessages() {

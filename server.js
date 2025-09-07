@@ -1069,6 +1069,101 @@ const createExpressServer = () => {
         }
     });
 
+    // Serve template file
+    app.get('/template.xlsx', (req, res) => {
+        const path = require('path');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="contacts_template.xlsx"');
+        res.sendFile(path.join(process.cwd(), 'public', 'template.xlsx'));
+    });
+
+    // Upload template endpoint
+    app.post('/api/upload-template', async (req, res) => {
+        try {
+            const multer = await import('multer');
+            const XLSX = await import('xlsx');
+            
+            // Configure multer for file upload
+            const upload = multer.default({
+                storage: multer.default.memoryStorage(),
+                fileFilter: (req, file, cb) => {
+                    if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                        file.mimetype === 'text/csv') {
+                        cb(null, true);
+                    } else {
+                        cb(new Error('Only Excel (.xlsx) and CSV files are allowed'), false);
+                    }
+                }
+            });
+            
+            upload.single('template')(req, res, async (err) => {
+                if (err) {
+                    return res.json({ success: false, error: err.message });
+                }
+                
+                if (!req.file) {
+                    return res.json({ success: false, error: 'No file uploaded' });
+                }
+                
+                try {
+                    let workbook;
+                    let worksheet;
+                    
+                    if (req.file.mimetype === 'text/csv') {
+                        // Handle CSV file
+                        const csvData = req.file.buffer.toString('utf8');
+                        workbook = XLSX.default.read(csvData, { type: 'string' });
+                    } else {
+                        // Handle Excel file
+                        workbook = XLSX.default.read(req.file.buffer, { type: 'buffer' });
+                    }
+                    
+                    // Get the first worksheet
+                    const sheetName = workbook.SheetNames[0];
+                    worksheet = workbook.Sheets[sheetName];
+                    
+                    // Convert to JSON
+                    const jsonData = XLSX.default.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length === 0) {
+                        return res.json({ success: false, error: 'No data found in the file' });
+                    }
+                    
+                    // Process and save contacts
+                    const contacts = jsonData.map(row => ({
+                        phone: String(row.Phone || row.phone || '').trim(),
+                        name: String(row.Name || row.name || '').trim(),
+                        source: String(row.Source || row.source || 'Template Upload').trim(),
+                        notes: String(row.Notes || row.notes || '').trim()
+                    })).filter(contact => contact.phone); // Only include contacts with phone numbers
+                    
+                    if (contacts.length === 0) {
+                        return res.json({ success: false, error: 'No valid contacts found (phone numbers required)' });
+                    }
+                    
+                    // Save contacts to database
+                    const results = await mysqlDB.addContacts(contacts);
+                    const successCount = results.filter(r => r.success).length;
+                    
+                    res.json({
+                        success: true,
+                        count: successCount,
+                        total: contacts.length,
+                        message: `Successfully imported ${successCount} out of ${contacts.length} contacts`
+                    });
+                    
+                } catch (error) {
+                    console.error('Error processing uploaded file:', error);
+                    res.json({ success: false, error: 'Error processing file: ' + error.message });
+                }
+            });
+            
+        } catch (error) {
+            console.error('Upload error:', error);
+            res.json({ success: false, error: error.message });
+        }
+    });
+
     // Check auth status and auto-initialize if needed
     app.get('/api/auth-status', async (req, res) => {
         try {

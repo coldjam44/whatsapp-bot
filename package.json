@@ -20,11 +20,13 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.1.0",
+    "multer": "^2.0.2",
     "mysql2": "^3.14.4",
     "qrcode": "^1.5.3",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.23.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
