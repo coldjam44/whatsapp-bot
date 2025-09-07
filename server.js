@@ -537,6 +537,16 @@ const createExpressServer = () => {
                     
 
                     window.onload = function() {
+                        // Check auth status and auto-initialize if needed
+                        fetch('/api/auth-status')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success && !data.isAuthenticated && !data.hasAuthFiles) {
+                                    console.log('No auth files found, QR code should be generated');
+                                }
+                            })
+                            .catch(error => console.log('Auth status check failed:', error));
+                        
                         if (!${globalState.isAuthenticated}) {
                             startAutoRefresh();
                         }
@@ -643,11 +653,11 @@ const createExpressServer = () => {
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert('Logged out successfully! Server will restart automatically.');
-                                // Wait a bit then reload to show the restart
+                                alert('Logged out successfully! Refreshing page...');
+                                // Refresh immediately to check auth status
                                 setTimeout(() => {
                                     window.location.reload();
-                                }, 3000);
+                                }, 1000);
                             } else {
                                 alert('Error during logout: ' + data.error);
                             }
@@ -715,13 +725,6 @@ const createExpressServer = () => {
                 success: true,
                 message: 'Logged out successfully'
             });
-            
-            // Restart the server after logout
-            logger.info('🔄 Restarting server after logout...');
-            setTimeout(() => {
-                logger.info('🚀 Server restart initiated');
-                process.exit(0); // This will cause PM2 to restart the process
-            }, 2000); // 2 second delay to ensure response is sent
             
         } catch (error) {
             logger.error('Error during logout', [error.message]);
@@ -1066,6 +1069,44 @@ const createExpressServer = () => {
         }
     });
 
+    // Check auth status and auto-initialize if needed
+    app.get('/api/auth-status', async (req, res) => {
+        try {
+            const hasAuthFiles = await checkAuthFiles();
+            
+            // If no auth files and no client, initialize WhatsApp
+            if (!hasAuthFiles && !globalState.client) {
+                logger.info('🔄 Auto-initializing WhatsApp client (no auth files found)');
+                
+                // Create new client
+                const client = createWhatsAppClient();
+                globalState.client = client;
+                
+                // Setup event handlers
+                setupEventHandlers(client);
+                
+                // Start the client (this will generate QR code)
+                await client.initialize();
+                
+                logger.success('WhatsApp client initialized', ['QR code should be generated']);
+            }
+            
+            res.json({
+                success: true,
+                hasAuthFiles: hasAuthFiles,
+                isAuthenticated: globalState.isAuthenticated,
+                hasClient: !!globalState.client,
+                currentQR: globalState.currentQR
+            });
+        } catch (error) {
+            logger.error('Error in auth status check', [error.message]);
+            res.json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
     // Individual message endpoint (for backward compatibility)
     app.post('/send-bulk-message', async (req, res) => {
         try {
@@ -1124,13 +1165,31 @@ const createExpressServer = () => {
 };
 
 // Main application startup
+// Check if auth files exist
+const checkAuthFiles = async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    const authDir = path.join(process.cwd(), '.wwebjs_auth');
+    return fs.existsSync(authDir);
+};
+
 const startApplication = async () => {
     try {
         logger.info('🚀 Starting WhatsApp Bot Application', [
             'Loading required modules...',
             'Setting up configuration...',
-            'Initializing WhatsApp client...'
+            'Checking authentication status...'
         ]);
+
+        // Check if auth files exist
+        const hasAuthFiles = await checkAuthFiles();
+        
+        if (hasAuthFiles) {
+            logger.info('🔐 Authentication files found', ['Client will attempt to restore session']);
+        } else {
+            logger.info('🔓 No authentication files found', ['QR code will be generated for new login']);
+        }
 
         // Create WhatsApp client
         const client = createWhatsAppClient();
