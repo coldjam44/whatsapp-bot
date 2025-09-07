@@ -4,9 +4,6 @@ export default function registerMessageHandlers(client) {
     let userStates = {};
     let userData = [];
     let completedUsers = [];
-    let cachedOffers = null;
-    let lastOffersFetch = 0;
-    const OFFERS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
   
     // Regex for numbers (Arabic + English)
     const numberRegex = /^[0-9\u0660-\u0669]+$/;
@@ -14,17 +11,9 @@ export default function registerMessageHandlers(client) {
     // API Configuration
     const API_BASE_URL = 'https://realestate.azsystems.tech';
     
-    // Fetch offers from API
+    // Fetch offers from API (always fresh, no caching)
     const fetchOffers = async () => {
         try {
-            const now = Date.now();
-            
-            // Return cached offers if still valid
-            if (cachedOffers && (now - lastOffersFetch) < OFFERS_CACHE_DURATION) {
-                console.log('📋 Using cached offers');
-                return cachedOffers;
-            }
-            
             console.log('🌐 Fetching fresh offers from API...');
             const response = await fetch(`${API_BASE_URL}/api/bot/offers`);
             
@@ -35,10 +24,8 @@ export default function registerMessageHandlers(client) {
             const data = await response.json();
             
             if (data.success && data.data && Array.isArray(data.data)) {
-                cachedOffers = data.data;
-                lastOffersFetch = now;
-                console.log(`✅ Fetched ${data.count} offers from API`);
-                return cachedOffers;
+                console.log(`✅ Fetched ${data.count} fresh offers from API`);
+                return data.data;
             } else {
                 throw new Error('Invalid API response format');
             }
@@ -71,7 +58,12 @@ export default function registerMessageHandlers(client) {
         offers.forEach((offer, index) => {
             const emoji = index === 0 ? "💎" : index === 1 ? "🌊" : "🏢";
             const offerText = lang === 'ar' ? offer.display_text_ar : offer.display_text_en;
-            offersText += `${index + 1}️⃣ عرض رقم ${index + 1}: ${offerText} ${emoji}\n`;
+            
+            if (lang === 'ar') {
+                offersText += `${index + 1}️⃣ عرض رقم ${index + 1}: ${offerText} ${emoji}\n`;
+            } else {
+                offersText += `${index + 1}️⃣ Offer ${index + 1}: ${offerText} ${emoji}\n`;
+            }
         });
         
         offersText += lang === 'ar' ? "أرسل أي رقم لاختيار العرض" : "Send any number to choose an offer";
@@ -90,7 +82,8 @@ export default function registerMessageHandlers(client) {
             welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
             invalidNumber: "❌ الرجاء إدخال رقم صالح",
             validNumber: "أرسل رقم صالح",
-            loadingOffers: "⏳ جاري تحميل العروض..."
+            loadingOffers: "⏳ جاري تحميل العروض...",
+            noOffersAskName: "عذراً، لا توجد عروض متاحة حالياً 📋\nلكن يمكننا إرسال العروض الجديدة لك مباشرة\nبرجاء كتابة اسمك"
         },
         en: {
             askName: (num, offerText) => `Great ✅ You chose Offer ${num}\n${offerText}\nPlease enter your name`,
@@ -101,7 +94,8 @@ export default function registerMessageHandlers(client) {
             welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
             invalidNumber: "❌ Please enter a valid number",
             validNumber: "Send a valid number",
-            loadingOffers: "⏳ Loading offers..."
+            loadingOffers: "⏳ Loading offers...",
+            noOffersAskName: "Sorry, no offers are available at the moment 📋\nBut we can send you new offers directly\nPlease enter your name"
         }
     };
 
@@ -179,7 +173,6 @@ export default function registerMessageHandlers(client) {
             // Welcome → Show offers
             if (userStates[from].step === 'WELCOME') {
                 if (numberRegex.test(text)) {
-                    userStates[from].step = 'CHOOSE_OFFER';
                     console.log(`📋 User ${from} proceeding to offers`);
                     
                     // Send loading message first
@@ -187,12 +180,22 @@ export default function registerMessageHandlers(client) {
                     
                     // Fetch offers from API
                     const offers = await fetchOffers();
-                    const offersText = generateOffersText(offers, lang);
                     
-                    // Store offers in user state for later reference
-                    userStates[from].offers = offers;
-                    
-                    return await message.reply(offersText);
+                    // Check if offers are available
+                    if (offers && offers.length > 0) {
+                        userStates[from].step = 'CHOOSE_OFFER';
+                        const offersText = generateOffersText(offers, lang);
+                        userStates[from].offers = offers;
+                        return await message.reply(offersText);
+                    } else {
+                        // No offers available - go directly to contact collection
+                        userStates[from].step = 'ASK_NAME';
+                        userStates[from].offer = 'no_offers';
+                        userStates[from].selectedOfferText = lang === 'ar' ? 'لا توجد عروض متاحة حالياً' : 'No offers available at the moment';
+                        
+                        console.log(`📋 User ${from} - No offers available, proceeding to contact collection`);
+                        return await message.reply(texts[lang].noOffersAskName);
+                    }
                 }
                 console.log(`❌ User ${from} invalid input in WELCOME step: "${text}"`);
                 return await message.reply(texts[lang].invalid);
@@ -217,11 +220,19 @@ export default function registerMessageHandlers(client) {
                         return await message.reply(texts[lang].askName(offerNum, offerText));
                     } else {
                         console.log(`❌ User ${from} chose invalid offer number: ${offerNum}`);
-                        return await message.reply(texts[lang].validNumber);
+                        // Fetch fresh offers from API and re-display
+                        const freshOffers = await fetchOffers();
+                        const offersText = generateOffersText(freshOffers, lang);
+                        userStates[from].offers = freshOffers; // Update stored offers
+                        return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
                     }
                 }
                 console.log(`❌ User ${from} invalid input in CHOOSE_OFFER step: "${text}"`);
-                return await message.reply(texts[lang].validNumber);
+                // Fetch fresh offers from API and re-display
+                const freshOffers = await fetchOffers();
+                const offersText = generateOffersText(freshOffers, lang);
+                userStates[from].offers = freshOffers; // Update stored offers
+                return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
             }
 
             // Ask for name
@@ -255,11 +266,27 @@ export default function registerMessageHandlers(client) {
                 // Clean up user state
                 delete userStates[from];
                 
-                return await message.reply(texts[lang].thank);
+                // Different thank you message based on whether offers were available
+                const thankMessage = userDataEntry.offer === 'no_offers' 
+                    ? (lang === 'ar' 
+                        ? "شكرًا لك 🌹\nتم تسجيل بياناتك وسنرسل لك العروض الجديدة مباشرة عند توفرها"
+                        : "Thank you 🌹\nYour information has been registered and we will send you new offers directly when available")
+                    : texts[lang].thank;
+                
+                return await message.reply(thankMessage);
             }
 
             // Default response for invalid input
             console.log(`❌ User ${from} invalid input in step ${userStates[from].step}: "${text}"`);
+            
+            // If user is in CHOOSE_OFFER step and enters invalid input, fetch fresh offers and re-show
+            if (userStates[from].step === 'CHOOSE_OFFER') {
+                const freshOffers = await fetchOffers();
+                const offersText = generateOffersText(freshOffers, lang);
+                userStates[from].offers = freshOffers; // Update stored offers
+                return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
+            }
+            
             return await message.reply(texts[lang].invalid);
 
         } catch (error) {

@@ -29,12 +29,13 @@ class PhoneDatabase {
         }
     }
 
-    addContact(phoneNumber, name = '', source = 'manual') {
+    addContact(phoneNumber, name = '', source = 'manual', notes = '') {
         const contact = {
             id: Date.now(),
             phone: phoneNumber,
             name: name,
             source: source,
+            notes: notes,
             addedAt: new Date().toISOString(),
             lastMessage: null,
             messageCount: 0
@@ -54,7 +55,7 @@ class PhoneDatabase {
     addContacts(contacts) {
         const results = [];
         for (const contact of contacts) {
-            const result = this.addContact(contact.phone, contact.name, contact.source);
+            const result = this.addContact(contact.phone, contact.name, contact.source, contact.notes);
             results.push(result);
         }
         return results;
@@ -91,6 +92,60 @@ class PhoneDatabase {
 
     getGroups() {
         return this.data.groups;
+    }
+
+    updateContact(phoneNumber, name = '', source = 'manual', notes = '') {
+        try {
+            const contactIndex = this.data.contacts.findIndex(contact => contact.phone === phoneNumber);
+            if (contactIndex !== -1) {
+                this.data.contacts[contactIndex].name = name;
+                this.data.contacts[contactIndex].source = source;
+                this.data.contacts[contactIndex].notes = notes;
+                this.data.contacts[contactIndex].updatedAt = new Date().toISOString();
+                this.saveData();
+                return { success: true, message: `Contact ${phoneNumber} updated successfully`, contact: this.data.contacts[contactIndex] };
+            } else {
+                return { success: false, message: `Contact ${phoneNumber} not found` };
+            }
+        } catch (error) {
+            console.error('Error updating contact:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    deleteContact(phoneNumber) {
+        try {
+            const initialLength = this.data.contacts.length;
+            
+            // Remove contact from array
+            this.data.contacts = this.data.contacts.filter(contact => contact.phone !== phoneNumber);
+            
+            const finalLength = this.data.contacts.length;
+            
+            if (finalLength < initialLength) {
+                // Contact was found and removed
+                this.saveData();
+                return { 
+                    success: true, 
+                    message: `Contact ${phoneNumber} deleted successfully`,
+                    deleted: true
+                };
+            } else {
+                // Contact not found
+                return { 
+                    success: false, 
+                    message: `Contact ${phoneNumber} not found`,
+                    deleted: false
+                };
+            }
+        } catch (error) {
+            console.error('Error deleting contact:', error);
+            return { 
+                success: false, 
+                error: error.message,
+                deleted: false
+            };
+        }
     }
 }
 

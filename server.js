@@ -6,6 +6,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import PhoneDatabase from './database.js';
+import MySQLDatabase from './mysql_database.js';
 
 // Configuration constants
 const PORT = 8046;
@@ -49,6 +50,16 @@ const globalState = {
 
 // Initialize database
 const phoneDB = new PhoneDatabase();
+const mysqlDB = new MySQLDatabase();
+
+// Connect to MySQL database
+mysqlDB.connect().then(connected => {
+    if (connected) {
+        console.log('✅ MySQL database connected successfully');
+    } else {
+        console.log('⚠️ MySQL database connection failed, using JSON fallback');
+    }
+});
 
 
 // WhatsApp client configuration
@@ -632,8 +643,11 @@ const createExpressServer = () => {
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert('Logged out successfully! Page will refresh.');
-                                window.location.reload();
+                                alert('Logged out successfully! Server will restart automatically.');
+                                // Wait a bit then reload to show the restart
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 3000);
                             } else {
                                 alert('Error during logout: ' + data.error);
                             }
@@ -701,6 +715,13 @@ const createExpressServer = () => {
                 success: true,
                 message: 'Logged out successfully'
             });
+            
+            // Restart the server after logout
+            logger.info('🔄 Restarting server after logout...');
+            setTimeout(() => {
+                logger.info('🚀 Server restart initiated');
+                process.exit(0); // This will cause PM2 to restart the process
+            }, 2000); // 2 second delay to ensure response is sent
             
         } catch (error) {
             logger.error('Error during logout', [error.message]);
@@ -919,36 +940,41 @@ const createExpressServer = () => {
     });
 
     // Phone number management endpoints
-    app.post('/api/contacts', (req, res) => {
+    app.post('/api/contacts', async (req, res) => {
         try {
-            const { phone, name, source } = req.body;
-            const result = phoneDB.addContact(phone, name, source);
+            const { phone, name, source, notes } = req.body;
+            const result = await mysqlDB.addContact(phone, name, source, notes);
             res.json(result);
         } catch (error) {
             res.json({ success: false, error: error.message });
         }
     });
 
-    app.post('/api/contacts/bulk', (req, res) => {
+    app.post('/api/contacts/bulk', async (req, res) => {
         try {
             const { contacts } = req.body;
-            const results = phoneDB.addContacts(contacts);
+            const results = await mysqlDB.addContacts(contacts);
             res.json({ success: true, results });
         } catch (error) {
             res.json({ success: false, error: error.message });
         }
     });
 
-    app.get('/api/contacts', (req, res) => {
+    app.put('/api/contacts/update', async (req, res) => {
+        try {
+            const { phone, name, source, notes } = req.body;
+            const result = await mysqlDB.updateContact(phone, name, source, notes);
+            res.json(result);
+        } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
+
+    app.get('/api/contacts', async (req, res) => {
         try {
             const { limit = 100, source } = req.query;
-            let contacts;
-            if (source) {
-                contacts = phoneDB.getContactsBySource(source);
-            } else {
-                contacts = phoneDB.getContacts(parseInt(limit));
-            }
-            res.json({ success: true, contacts });
+            const result = await mysqlDB.getContacts(limit, source);
+            res.json(result);
         } catch (error) {
             res.json({ success: false, error: error.message });
         }
@@ -964,6 +990,78 @@ const createExpressServer = () => {
             res.setHeader('Content-Disposition', 'attachment; filename=contacts.csv');
             res.send(csv);
         } catch (error) {
+            res.json({ success: false, error: error.message });
+        }
+    });
+
+    // Delete contact endpoint
+    app.post('/api/contacts/delete', async (req, res) => {
+        try {
+            const phone = req.body.phone;
+            
+            if (!phone) {
+                return res.json({ success: false, error: 'Phone number is required' });
+            }
+            
+            const result = await mysqlDB.deleteContact(phone);
+            
+            if (result.success) {
+                // Redirect back to spreadsheet page with success message
+                res.redirect('/spreadsheet?deleted=' + encodeURIComponent(phone));
+            } else {
+                // Redirect back with error message
+                res.redirect('/spreadsheet?error=' + encodeURIComponent(result.message));
+            }
+        } catch (error) {
+            res.redirect('/spreadsheet?error=' + encodeURIComponent(error.message));
+        }
+    });
+
+    // Send message endpoint for spreadsheet
+    app.post('/api/send-message', async (req, res) => {
+        try {
+            const { phone, message } = req.body;
+            
+            if (!phone || !message) {
+                return res.json({ success: false, error: 'Phone number and message are required' });
+            }
+
+            // Format phone number for WhatsApp - handle international numbers
+            let formattedPhone = phone.trim();
+            
+            if (formattedPhone.startsWith('+')) {
+                // International format: +1234567890 -> 1234567890@c.us
+                formattedPhone = formattedPhone.substring(1) + '@c.us';
+            } else if (formattedPhone.startsWith('00')) {
+                // International prefix: 001234567890 -> 1234567890@c.us
+                formattedPhone = formattedPhone.substring(2) + '@c.us';
+            } else if (formattedPhone.startsWith('0')) {
+                // Local format: 01234567890 -> 1234567890@c.us
+                formattedPhone = formattedPhone.substring(1) + '@c.us';
+            } else {
+                // Direct number: 1234567890 -> 1234567890@c.us
+                formattedPhone = formattedPhone + '@c.us';
+            }
+
+            // Check if WhatsApp client is ready and authenticated
+            if (!globalState.client || !globalState.isAuthenticated) {
+                return res.json({ success: false, error: 'WhatsApp client is not ready or not authenticated' });
+            }
+
+            // Send the message
+            await globalState.client.sendMessage(formattedPhone, message);
+            
+            // Update contact's last message and message count in database
+            try {
+                await mysqlDB.updateContact(phone, null, null, null, message, true);
+            } catch (dbError) {
+                console.log('Note: Could not update contact stats in database:', dbError.message);
+            }
+
+            res.json({ success: true, message: 'Message sent successfully' });
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
             res.json({ success: false, error: error.message });
         }
     });

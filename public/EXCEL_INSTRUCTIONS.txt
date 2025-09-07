@@ -9,7 +9,7 @@ Method 1: Format Column as Text BEFORE entering data
 
 Method 2: Use Single Quote Before Each Number
 1. Type a single quote (') before each phone number
-2. Example: '966502391798
+2. Example: '966123456789
 3. Excel will treat it as text and not convert to scientific notation
 
 Method 3: Import as Text
