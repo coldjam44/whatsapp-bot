@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logging Out - WhatsApp Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .logout-container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #25D366;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+
+        .loading-animation {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #25D366;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #25D366, #128C7E);
+            border-radius: 3px;
+            animation: progress 120s linear forwards;
+        }
+
+        @keyframes progress {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+
+        .status-messages {
+            margin: 20px 0;
+            min-height: 60px;
+        }
+
+        .status-message {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.5s ease forwards;
+            margin: 10px 0;
+            font-size: 1.1rem;
+        }
+
+        .status-message:nth-child(1) { animation-delay: 5s; }
+        .status-message:nth-child(2) { animation-delay: 20s; }
+        .status-message:nth-child(3) { animation-delay: 40s; }
+        .status-message:nth-child(4) { animation-delay: 60s; }
+        .status-message:nth-child(5) { animation-delay: 80s; }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .countdown {
+            font-size: 1.2rem;
+            margin: 20px 0;
+            color: #25D366;
+            font-weight: bold;
+        }
+
+        .whatsapp-icon {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #25D366;
+            border-radius: 50%;
+            margin-right: 10px;
+            position: relative;
+        }
+
+        .whatsapp-icon::after {
+            content: '📱';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 16px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="logout-container">
+        <div class="logo pulse">🤖</div>
+        <h1>Logging Out...</h1>
+        
+        <div class="loading-animation">
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+        
+        <div class="status-messages">
+            <div class="status-message">
+                <span class="whatsapp-icon"></span>
+                Disconnecting from WhatsApp...
+            </div>
+            <div class="status-message">
+                <span class="whatsapp-icon"></span>
+                Clearing session data...
+            </div>
+            <div class="status-message">
+                <span class="whatsapp-icon"></span>
+                Removing authentication files...
+            </div>
+            <div class="status-message">
+                <span class="whatsapp-icon"></span>
+                Restarting bot service...
+            </div>
+            <div class="status-message">
+                <span class="whatsapp-icon"></span>
+                Preparing fresh connection...
+            </div>
+        </div>
+        
+        <div class="countdown" id="countdown">
+            Redirecting in <span id="timer">120</span> seconds...
+        </div>
+        
+        <div class="footer">
+            <p>WhatsApp Bot by AZ Systems</p>
+            <p>Please wait while we complete the logout process</p>
+        </div>
+    </div>
+
+    <script>
+        let timeLeft = 120; // 2 minutes
+        const timerElement = document.getElementById('timer');
+        
+        const countdown = setInterval(() => {
+            timeLeft--;
+            timerElement.textContent = timeLeft;
+            
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                // Redirect back to main page
+                window.location.href = '/';
+            }
+        }, 1000);
+
+        // Add some dynamic effects
+        const messages = document.querySelectorAll('.status-message');
+        messages.forEach((message, index) => {
+            setTimeout(() => {
+                message.style.color = '#25D366';
+            }, (index + 1) * 20000); // Updated timing for 2-minute duration
+        });
+    </script>
+</body>
+</html>

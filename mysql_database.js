@@ -2,7 +2,7 @@ import mysql from 'mysql2/promise';
 
 class MySQLDatabase {
     constructor() {
-        this.connection = null;
+        this.pool = null;
         this.config = {
             host: 'localhost',
             user: 'botdb',
@@ -16,11 +16,13 @@ class MySQLDatabase {
 
     async connect() {
         try {
-            this.connection = await mysql.createConnection(this.config);
-            console.log('✅ Connected to MySQL database');
+            this.pool = mysql.createPool(this.config);
+            console.log('✅ Connected to MySQL database pool');
             
-            // Create table if not exists
-            await this.createTable();
+            // Test connection and create table
+            const connection = await this.pool.getConnection();
+            await this.createTable(connection);
+            connection.release();
             return true;
         } catch (error) {
             console.error('❌ Error connecting to MySQL:', error.message);
@@ -28,8 +30,9 @@ class MySQLDatabase {
         }
     }
 
-    async createTable() {
+    async createTable(connection = null) {
         try {
+            const conn = connection || await this.pool.getConnection();
             const createTableQuery = `
                 CREATE TABLE IF NOT EXISTS contacts (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -44,15 +47,23 @@ class MySQLDatabase {
                 )
             `;
             
-            await this.connection.execute(createTableQuery);
+            await conn.execute(createTableQuery);
             console.log('✅ Contacts table created/verified');
+            
+            if (!connection) {
+                conn.release();
+            }
         } catch (error) {
             console.error('❌ Error creating table:', error.message);
         }
     }
 
     async addContact(phoneNumber, name = '', source = '', notes = '') {
+        let connection = null;
         try {
+            // Get connection from pool
+            connection = await this.pool.getConnection();
+            
             const query = `
                 INSERT INTO contacts (phone, name, source, notes) 
                 VALUES (?, ?, ?, ?)
@@ -63,7 +74,7 @@ class MySQLDatabase {
                 updated_at = CURRENT_TIMESTAMP
             `;
             
-            const [result] = await this.connection.execute(query, [phoneNumber, name, source, notes]);
+            const [result] = await connection.execute(query, [phoneNumber, name, source, notes]);
             
             if (result.affectedRows > 0) {
                 return { 
@@ -77,6 +88,11 @@ class MySQLDatabase {
         } catch (error) {
             console.error('Error adding contact:', error);
             return { success: false, error: error.message };
+        } finally {
+            // Always release the connection back to the pool
+            if (connection) {
+                connection.release();
+            }
         }
     }
 
@@ -90,17 +106,25 @@ class MySQLDatabase {
     }
 
     async getContacts(limit = 100, source = null) {
+        let connection = null;
         try {
+            connection = await this.pool.getConnection();
             let rows;
             
+            // Sanitize limit to prevent SQL injection
+            const safeLimit = Math.max(1, Math.min(parseInt(limit) || 100, 1000));
+            
             if (source) {
-                const [result] = await this.connection.execute(
-                    `SELECT * FROM contacts WHERE source = '${source}' ORDER BY added_at DESC LIMIT ${parseInt(limit)}`
+                // Use string interpolation for LIMIT since it doesn't work with prepared statements
+                const [result] = await connection.execute(
+                    `SELECT * FROM contacts WHERE source = ? ORDER BY added_at DESC LIMIT ${safeLimit}`,
+                    [source]
                 );
                 rows = result;
             } else {
-                const [result] = await this.connection.execute(
-                    `SELECT * FROM contacts ORDER BY added_at DESC LIMIT ${parseInt(limit)}`
+                // Use string interpolation for LIMIT since it doesn't work with prepared statements
+                const [result] = await connection.execute(
+                    `SELECT * FROM contacts ORDER BY added_at DESC LIMIT ${safeLimit}`
                 );
                 rows = result;
             }
@@ -109,11 +133,17 @@ class MySQLDatabase {
         } catch (error) {
             console.error('Error getting contacts:', error);
             return { success: false, error: error.message };
+        } finally {
+            if (connection) {
+                connection.release();
+            }
         }
     }
 
     async updateContact(phoneNumber, name = '', source = '', notes = '', lastMessage = null, incrementCount = false) {
+        let connection = null;
         try {
+            connection = await this.pool.getConnection();
             let query, params;
             
             if (lastMessage !== null || incrementCount) {
@@ -137,7 +167,7 @@ class MySQLDatabase {
                 params = [name, source, notes, phoneNumber];
             }
             
-            const [result] = await this.connection.execute(query, params);
+            const [result] = await connection.execute(query, params);
             
             if (result.affectedRows > 0) {
                 return { 
@@ -151,13 +181,19 @@ class MySQLDatabase {
         } catch (error) {
             console.error('Error updating contact:', error);
             return { success: false, error: error.message };
+        } finally {
+            if (connection) {
+                connection.release();
+            }
         }
     }
 
     async deleteContact(phoneNumber) {
+        let connection = null;
         try {
+            connection = await this.pool.getConnection();
             const query = 'DELETE FROM contacts WHERE phone = ?';
-            const [result] = await this.connection.execute(query, [phoneNumber]);
+            const [result] = await connection.execute(query, [phoneNumber]);
             
             if (result.affectedRows > 0) {
                 return { 
@@ -179,24 +215,34 @@ class MySQLDatabase {
                 error: error.message,
                 deleted: false
             };
+        } finally {
+            if (connection) {
+                connection.release();
+            }
         }
     }
 
     async getGroups() {
+        let connection = null;
         try {
+            connection = await this.pool.getConnection();
             const query = 'SELECT DISTINCT source as name, COUNT(*) as count FROM contacts GROUP BY source';
-            const [rows] = await this.connection.execute(query);
+            const [rows] = await connection.execute(query);
             return rows;
         } catch (error) {
             console.error('Error getting groups:', error);
             return [];
+        } finally {
+            if (connection) {
+                connection.release();
+            }
         }
     }
 
     async close() {
-        if (this.connection) {
-            await this.connection.end();
-            console.log('✅ MySQL connection closed');
+        if (this.pool) {
+            await this.pool.end();
+            console.log('✅ MySQL connection pool closed');
         }
     }
 }

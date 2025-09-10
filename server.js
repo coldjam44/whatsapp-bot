@@ -61,6 +61,8 @@ mysqlDB.connect().then(connected => {
     }
 });
 
+// Note: Session files are preserved - only QR code #3 will be displayed
+
 
 // WhatsApp client configuration
 const createWhatsAppClient = () => {
@@ -80,25 +82,47 @@ const createWhatsAppClient = () => {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--no-zygote',
-                '--single-process'
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                '--disable-extensions',
+                '--disable-plugins',
+                '--disable-default-apps',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--memory-pressure-off',
+                '--max_old_space_size=4096'
             ]
         }
     });
 };
 
-// QR code generation
-const generateQRCode = async (qr) => {
-    try {
-        logger.step(2, 'Generating QR Code', [
-            'Event: QR code received from WhatsApp',
-            'Status: Waiting for user to scan'
-        ]);
+// QR code generation with extended duration
+let qrCounter = 0;
+let lastQRTime = 0;
+const QR_DURATION_MS = 45000; // 45 seconds - longer duration for QR code
 
+const generateQRCode = async (qr) => {
+    qrCounter++;
+    const currentTime = Date.now();
+    
+    try {
         if (globalState.isAuthenticated) {
             logger.success('Already authenticated, skipping QR code generation');
             return;
         }
+
+        // Check if enough time has passed since last QR code (to make it last longer)
+        if (globalState.currentQR && (currentTime - lastQRTime) < QR_DURATION_MS) {
+            console.log(`⏳ QR code still valid for ${Math.round((QR_DURATION_MS - (currentTime - lastQRTime)) / 1000)} more seconds`);
+            return;
+        }
+
+        logger.step(2, 'Generating QR Code', [
+            'Event: QR code received from WhatsApp',
+            'Status: Ready for user to scan',
+            `Duration: ${QR_DURATION_MS / 1000} seconds`
+        ]);
 
         // Generate terminal QR code
         qrcode.generate(qr, { small: true });
@@ -106,7 +130,8 @@ const generateQRCode = async (qr) => {
             'Action Required: Open WhatsApp on your phone',
             'Action Required: Go to Settings > Linked Devices',
             'Action Required: Tap "Link a Device"',
-            'Action Required: Scan the QR code above'
+            'Action Required: Scan the QR code above',
+            `QR Code #${qrCounter} - Valid for ${QR_DURATION_MS / 1000} seconds`
         ]);
 
         // Generate browser QR code
@@ -117,8 +142,11 @@ const generateQRCode = async (qr) => {
         });
 
         globalState.currentQR = qrDataURL;
+        lastQRTime = currentTime;
+        
         logger.success('QR code generated for browser display', [
             'Browser Dashboard: QR code is now visible',
+            `Duration: ${QR_DURATION_MS / 1000} seconds before next refresh`,
             'Auto-refresh: Dashboard will refresh every 2 seconds'
         ]);
 
@@ -653,11 +681,8 @@ const createExpressServer = () => {
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert('Logged out successfully! Refreshing page...');
-                                // Refresh immediately to check auth status
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 1000);
+                                // Redirect to logout animation page
+                                window.location.href = data.redirect || '/logout.html';
                             } else {
                                 alert('Error during logout: ' + data.error);
                             }
@@ -721,10 +746,18 @@ const createExpressServer = () => {
                 'Client destroyed'
             ]);
             
+            // Send JSON response first
             res.json({
                 success: true,
-                message: 'Logged out successfully'
+                message: 'Logged out successfully. Redirecting to logout page...',
+                redirect: '/logout.html'
             });
+            
+            // Restart the bot after a short delay
+            setTimeout(() => {
+                logger.info('Restarting bot after logout...');
+                process.exit(0); // PM2 will automatically restart the process
+            }, 2000);
             
         } catch (error) {
             logger.error('Error during logout', [error.message]);
@@ -738,6 +771,11 @@ const createExpressServer = () => {
     // Bulk messaging page route
     app.get("/blkmsg", (req, res) => {
         res.sendFile('test.html', { root: 'public' });
+    });
+
+    // Logout animation page route
+    app.get("/logout.html", (req, res) => {
+        res.sendFile('logout.html', { root: 'public' });
     });
 
     // Spreadsheet page route
