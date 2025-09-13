@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Editor - Bot Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .nav {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+        .nav a:hover {
+            color: #5a6fd8;
+        }
+        .content {
+            padding: 30px;
+        }
+        .editor-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+        }
+        .editor-section h3 {
+            margin-top: 0;
+            color: #495057;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #495057;
+        }
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .form-group textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+            resize: vertical;
+        }
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: black;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .preview-section {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .preview-section h4 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .preview-message {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+            white-space: pre-wrap;
+            min-height: 100px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .message-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .message-type {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .message-type:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .message-type.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+        .message-type h4 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+        }
+        .message-type p {
+            margin: 0;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Yes/No Conversation Templates</h1>
+            <p>Create and manage different conversation flow templates for any business</p>
+        </div>
+        
+        <div class="nav">
+            <a href="/">🏠 Dashboard</a>
+            <a href="/spreadsheet">📊 Spreadsheet</a>
+            <a href="/message-editor">📝 Message Editor</a>
+            <a href="/template-manager">⚙️ Template Manager</a>
+        </div>
+        
+        <div class="content">
+            <div id="status" class="status"></div>
+            
+            <!-- Template Management -->
+            <div class="editor-section">
+                <h3>📋 Template Management</h3>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label for="templateSelect">Select Template:</label>
+                        <select id="templateSelect" onchange="loadTemplate()">
+                            <option value="luxury">🏰 Luxury Properties</option>
+                            <option value="firsttime">🏠 First-Time Buyers</option>
+                            <option value="expat">🌍 Expat Relocation</option>
+                            <option value="investor">💎 Smart Investors</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label for="newTemplateName">Create New Template:</label>
+                        <input type="text" id="newTemplateName" placeholder="Template name..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: end;">
+                        <button class="btn btn-success" onclick="createNewTemplate()">➕ Create</button>
+                        <button class="btn btn-primary" onclick="setAsDefault()">⭐ Set as Default</button>
+                        <button class="btn btn-warning" onclick="duplicateTemplate()">📋 Duplicate</button>
+                        <button class="btn btn-danger" onclick="deleteTemplate()">🗑️ Delete</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Instructions -->
+            <div class="editor-section" style="background: #f8f9fa; border-left: 4px solid #007bff;">
+                <h3>📋 Important Instructions</h3>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                    <h4 style="color: #dc3545; margin-top: 0;">⚠️ Required Elements:</h4>
+                    <ul style="color: #333; line-height: 1.8;">
+                        <li><strong>[NAME]</strong> - Must include this placeholder in fire messages to personalize with contact name</li>
+                        <li><strong>1 for Yes</strong> - Users must respond with "1" for yes/positive responses</li>
+                        <li><strong>2 for No</strong> - Users must respond with "2" for no/negative responses</li>
+                        <li><strong>Arabic & English</strong> - All messages must be bilingual (Arabic then English)</li>
+                    </ul>
+                    
+                    <h4 style="color: #28a745; margin-top: 20px;">✅ Template Structure:</h4>
+                    <ol style="color: #333; line-height: 1.8;">
+                        <li><strong>Fire Message:</strong> Initial bulk message with [NAME] placeholder</li>
+                        <li><strong>Language Selection:</strong> Ask user to choose Arabic or English</li>
+                        <li><strong>Yes Response:</strong> Message when user sends "1"</li>
+                        <li><strong>No Response:</strong> Message when user sends "2"</li>
+                        <li><strong>Details Request:</strong> Ask for specific information</li>
+                        <li><strong>Updates Confirmed:</strong> When user wants updates</li>
+                        <li><strong>Updates Declined:</strong> When user doesn't want updates</li>
+                        <li><strong>Thank You:</strong> Final confirmation message</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <!-- Language Selection -->
+            <div class="editor-section">
+                <h3>🌍 Language Selection</h3>
+                <div class="form-group">
+                    <label for="language">Select Language to Edit:</label>
+                    <select id="language" onchange="loadAllMessages()">
+                        <option value="ar">العربية (Arabic)</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Complete Flow Editor -->
+            <div class="editor-section">
+                <h3>✏️ Edit Complete Flow</h3>
+                
+                <!-- Fire Message -->
+                <div class="form-group">
+                    <label for="fireMessage">🔥 Fire Message (Bulk Message):</label>
+                    <textarea id="fireMessage" placeholder="Initial bulk message sent to all contacts..."></textarea>
+                </div>
+                
+                <!-- Fire Message Response -->
+                <div class="form-group">
+                    <label for="chooseLang">🌍 Language Selection Message:</label>
+                    <textarea id="chooseLang" placeholder="Message when user responds to fire message..."></textarea>
+                </div>
+                
+                <!-- Yes Response -->
+                <div class="form-group">
+                    <label for="yesResponse">✅ Yes Response (User says Yes):</label>
+                    <textarea id="yesResponse" placeholder="Message when user says Yes..."></textarea>
+                </div>
+                
+                <!-- No Response -->
+                <div class="form-group">
+                    <label for="noResponse">❌ No Response (User says No):</label>
+                    <textarea id="noResponse" placeholder="Message when user says No..."></textarea>
+                </div>
+                
+                <!-- Details Request -->
+                <div class="form-group">
+                    <label for="askDetails">📝 Details Request:</label>
+                    <textarea id="askDetails" placeholder="Message asking for details..."></textarea>
+                </div>
+                
+                <!-- Updates Confirmed -->
+                <div class="form-group">
+                    <label for="updatesConfirmed">📋 Updates Confirmed:</label>
+                    <textarea id="updatesConfirmed" placeholder="Message when user wants updates..."></textarea>
+                </div>
+                
+                <!-- Updates Declined -->
+                <div class="form-group">
+                    <label for="updatesDeclined">🚫 Updates Declined:</label>
+                    <textarea id="updatesDeclined" placeholder="Message when user doesn't want updates..."></textarea>
+                </div>
+                
+                <!-- Thank You -->
+                <div class="form-group">
+                    <label for="thank">🙏 Thank You Message:</label>
+                    <textarea id="thank" placeholder="Final thank you message..."></textarea>
+                </div>
+                
+                       <!-- Action Buttons -->
+                       <div class="form-group">
+                           <button class="btn btn-info" onclick="validateTemplate()">🔍 Validate Template</button>
+                           <button class="btn btn-success" onclick="saveAllMessages()">💾 Save Complete Flow</button>
+                           <button class="btn btn-warning" onclick="resetAllMessages()">🔄 Reset All to Default</button>
+                           <button class="btn btn-primary" onclick="previewCompleteFlow()">👁️ Preview Complete Flow</button>
+                       </div>
+            </div>
+            
+            <!-- Flow Preview -->
+            <div class="preview-section">
+                <h4>👁️ Complete Flow Preview</h4>
+                <div id="flowPreview" class="preview-message">
+                    Select a language and click "Preview Complete Flow" to see the entire conversation flow...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentLanguage = 'ar';
+        let currentTemplate = 'luxury';
+        
+        // Business templates
+        const businessTemplates = {
+            luxury: {
+                ar: {
+                    fireMessage: "🏰 مرحباً [NAME] 👋\nنحن متخصصون في العقارات الفاخرة في أبوظبي.\nهل تملك عقاراً فاخراً أو تبحث عن عقار راقي؟\n\nللنعم أرسل 1، لللا أرسل 2\n\n✨ نحن نتعامل مع العقارات المميزة فقط\n🏰 Luxury Properties Specialist\n\n🏰 Hello [NAME] 👋\nWe specialize in luxury properties in Abu Dhabi.\nDo you own a luxury property or are you looking for an exclusive property?\n\nFor yes send 1, for no send 2\n\n✨ We deal with premium properties only\n🏰 Luxury Properties Specialist",
+                    chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "🏰 ممتاز! شكراً لاختيارك العقارات الفاخرة 🙏\n\nلنقدم لك أفضل خدمة، نود معرفة تفاصيل عقارك الفاخر:\n✨ الموقع المميز\n🏰 نوع العقار (فيلا راقية، بنتهاوس، قصر، إلخ)\n💰 القيمة المتوقعة\n\n🔒 خصوصية تامة - لن يتم الاتصال بك هاتفياً\n💎 خدمة VIP حصرية عبر الواتساب\n\nأرسل 1 لإرسال تفاصيل عقارك الفاخر",
+                    noResponse: "🌟 لا مشكلة! شكراً لتوضيحك\n\nإذا كنت مهتماً بالعقارات الفاخرة في المستقبل،\nيمكننا إرسال أحدث العقارات المميزة لك:\n\n🏰 فيلات راقية\n🏙️ بنتهاوس حصرية\n🏖️ عقارات ساحلية\n\n🔔 إشعارات VIP حصرية عبر الواتساب فقط\n\nأرسل 1 للموافقة على الإشعارات الفاخرة\nأرسل 2 للرفض",
+                    askDetails: "🏰 رائع! يرجى إرسال تفاصيل عقارك الفاخر:\n\n✨ الموقع المميز (مثل: جزيرة الريم، مارينا، كورنيش)\n🏰 نوع العقار (فيلا راقية، بنتهاوس، قصر، إلخ)\n📐 المساحة (متر مربع)\n💰 القيمة المتوقعة\n🌟 المميزات الخاصة (مسبح، حديقة، إطلالة، إلخ)\n\n💎 سنقوم بتقييم عقارك وتقديم أفضل عرض",
+                    updatesConfirmed: "🏰 ممتاز! تم تسجيلك في قائمة VIP للعقارات الفاخرة ✨\n\nستصلك:\n🏰 أحدث العقارات المميزة\n💎 عروض حصرية\n🌟 فرص استثمارية راقية\n\n🔔 إشعارات VIP عبر الواتساب فقط",
+                    updatesDeclined: "🌟 لا مشكلة! شكراً لك 🙏\n\nإذا غيرت رأيك في المستقبل،\nنحن هنا لخدمتك في العقارات الفاخرة 🏰",
+                    thank: "🏰 شكراً لك! تم تسجيل معلوماتك في قاعدة بيانات VIP ✨\n\nسيتم التواصل معك قريباً لتقييم عقارك الفاخر\n💎 خدمة VIP حصرية"
+            },
+            en: {
+                fireMessage: "🏰 Hello [NAME] 👋\nWe specialize in luxury properties in Abu Dhabi.\nDo you own a luxury property or are you looking for an exclusive property?\n\nFor yes send 1, for no send 2\n\n✨ We deal with premium properties only\n🏰 Luxury Properties Specialist\n\n🏰 مرحباً [NAME] 👋\nنحن متخصصون في العقارات الفاخرة في أبوظبي.\nهل تملك عقاراً فاخراً أو تبحث عن عقار راقي؟\n\nللنعم أرسل 1، لللا أرسل 2\n\n✨ نحن نتعامل مع العقارات المميزة فقط\n🏰 Luxury Properties Specialist",
+                chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                yesResponse: "🏰 Excellent! Thank you for choosing luxury properties 🙏\n\nTo provide you with the best service, we'd like to know about your luxury property:\n✨ Exclusive location\n🏰 Property type (luxury villa, penthouse, mansion, etc.)\n💰 Expected value\n\n🔒 Complete privacy - no phone calls\n💎 VIP service exclusively via WhatsApp\n\nSend 1 to share your luxury property details",
+                noResponse: "🌟 No problem! Thank you for clarifying\n\nIf you're interested in luxury properties in the future,\nwe can send you the latest exclusive properties:\n\n🏰 Luxury villas\n🏙️ Exclusive penthouses\n🏖️ Waterfront properties\n\n🔔 VIP notifications exclusively via WhatsApp\n\nSend 1 to agree to luxury notifications\nSend 2 to decline",
+                askDetails: "🏰 Wonderful! Please share your luxury property details:\n\n✨ Exclusive location (e.g., Al Reem Island, Marina, Corniche)\n🏰 Property type (luxury villa, penthouse, mansion, etc.)\n📐 Area (square meters)\n💰 Expected value\n🌟 Special features (pool, garden, view, etc.)\n\n💎 We'll evaluate your property and provide the best offer",
+                updatesConfirmed: "🏰 Excellent! You've been added to our VIP luxury properties list ✨\n\nYou'll receive:\n🏰 Latest exclusive properties\n💎 Special offers\n🌟 Premium investment opportunities\n\n🔔 VIP notifications via WhatsApp only",
+                updatesDeclined: "🌟 No problem! Thank you 🙏\n\nIf you change your mind in the future,\nwe're here to serve you in luxury properties 🏰",
+                thank: "🏰 Thank you! Your information has been registered in our VIP database ✨\n\nWe'll contact you soon to evaluate your luxury property\n💎 Exclusive VIP service"
+                }
+            },
+            firsttime: {
+                ar: {
+                    fireMessage: "🏠 مرحباً [NAME] 👋\nنحن متخصصون في مساعدة المشترين لأول مرة في أبوظبي!\nهل تفكر في شراء أول عقار لك؟\n\nللنعم أرسل 1، لللا أرسل 2\n\n🎯 نقدم دعم كامل للمشترين الجدد\n🏠 First-Time Buyer Specialists\n\n🏠 Hello [NAME] 👋\nWe specialize in helping first-time buyers in Abu Dhabi!\nAre you thinking of buying your first property?\n\nFor yes send 1, for no send 2\n\n🎯 We provide complete support for new buyers\n🏠 First-Time Buyer Specialists",
+                    chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "🏠 رائع! مرحباً بك في رحلة شراء أول عقار لك! 🎉\n\nنحن هنا لمساعدتك في كل خطوة:\n🏠 نوع العقار المطلوب (شقة، فيلا، استوديو)\n📍 الموقع المفضل\n💰 الميزانية المتاحة\n👨‍👩‍👧‍👦 احتياجات العائلة\n\n🤝 دعم كامل للمشترين الجدد\n📱 استشارة مجانية عبر الواتساب\n\nأرسل 1 لبدء رحلة شراء عقارك الأول",
+                    noResponse: "🏠 لا مشكلة! شكراً لك\n\nإذا كنت مهتماً بشراء عقار في المستقبل،\nيمكننا إرسال نصائح مفيدة لك:\n\n🏠 دليل المشترين لأول مرة\n💰 نصائح التمويل العقاري\n📍 أفضل المناطق للعائلات\n🎯 عروض خاصة للمشترين الجدد\n\nأرسل 1 للحصول على النصائح المجانية\nأرسل 2 للرفض",
+                    askDetails: "🏠 ممتاز! دعنا نتعرف على احتياجاتك:\n\n🏠 نوع العقار المطلوب:\n- شقة (1-3 غرف)\n- فيلا (3-5 غرف)\n- استوديو\n- تاون هاوس\n\n📍 الموقع المفضل:\n- قريب من العمل\n- قريب من المدارس\n- قريب من الخدمات\n\n💰 الميزانية المتاحة:\n- أقل من 500,000 درهم\n- 500,000 - 1,000,000 درهم\n- أكثر من 1,000,000 درهم\n\n👨‍👩‍👧‍👦 احتياجات العائلة:\n- عدد الغرف المطلوبة\n- موقف سيارات\n- حديقة أو شرفة",
+                    updatesConfirmed: "🏠 ممتاز! تم تسجيلك في برنامج دعم المشترين الجدد 🎯\n\nستصلك:\n🏠 نصائح شراء العقارات\n💰 معلومات التمويل العقاري\n📍 أفضل المناطق للعائلات\n🎯 عروض خاصة للمشترين لأول مرة\n\n📱 استشارة مجانية عبر الواتساب",
+                    updatesDeclined: "🏠 لا مشكلة! شكراً لك 🙏\n\nإذا غيرت رأيك في المستقبل،\nنحن هنا لمساعدتك في شراء أول عقار لك 🏠",
+                    thank: "🏠 شكراً لك! تم تسجيلك في برنامج دعم المشترين الجدد 🎉\n\nسيتم التواصل معك قريباً لتقديم:\n🤝 استشارة مجانية\n🏠 عروض مناسبة لميزانيتك\n📍 نصائح اختيار الموقع المناسب\n\n🎯 رحلة شراء عقارك الأول تبدأ الآن!"
+                },
+                en: {
+                    fireMessage: "Hello [NAME] 👋\nWe specialize in commercial real estate in Abu Dhabi.\nDo you have a commercial property you are thinking of selling or renting?\n\nFor yes send 1, for no send 2\n\nNote: Your number will be kept safe and will not be shared with anyone.\nAll offers and properties will only be sent via WhatsApp and with your consent\n\nمرحباً [NAME] 👋\nنحن متخصصون في العقارات التجارية في أبوظبي.\nهل لديك عقار تجاري تفكر في بيعه أو تأجيره؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع العروض والعقارات ستصلك فقط عبر الواتساب وبموافقتك",
+                    chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "Thank you for your reply 🙏\nTo help you better, please share a few details about your commercial property\n(property type, location, area, expected price).\n\nRest assured, we will not call you by phone.\nAll communication will remain through WhatsApp, at a time convenient for you.\n\nSend 1 to send property details",
+                    noResponse: "Thank you for clarifying 🌿\nIf you'd like, we can share with you from time to time the latest offers\nand commercial properties through WhatsApp only.\n\nNo calls, no interruptions — you decide if and when to continue.\n\nSend 1 to receive updates\nSend 2 to decline",
+                    askDetails: "Excellent! Please send commercial property details:\n- Property type (office, shop, warehouse, etc.)\n- Location\n- Area\n- Expected price\n- Any additional details",
+                    updatesConfirmed: "Thank you! You've been added to our updates list 📋\nYou'll receive new offers and commercial properties via WhatsApp only",
+                    updatesDeclined: "No problem, thank you! 🙏\nIf you change your mind in the future, you can contact us",
+                    thank: "Thank you 🌹\nYour information has been registered and we will contact you soon"
+                }
+            },
+            rental: {
+                ar: {
+                    fireMessage: "مرحباً [NAME] 👋\nنحن متخصصون في تأجير العقارات في أبوظبي.\nهل تبحث عن عقار للإيجار أو لديك عقار للتأجير؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع العروض والعقارات ستصلك فقط عبر الواتساب وبموافقتك\n\nHello [NAME] 👋\nWe specialize in property rentals in Abu Dhabi.\nAre you looking for a property to rent or do you have a property to rent out?\n\nFor yes send 1, for no send 2\n\nNote: Your number will be kept safe and will not be shared with anyone.\nAll offers and properties will only be sent via WhatsApp and with your consent",
+                    chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "شكراً لردك 🙏\nحتى نساعدك بشكل أفضل، ممكن تشاركنا تفاصيل احتياجاتك\n(نوع العقار، الموقع المفضل، الميزانية، المدة).\n\nاطمئن، لن يتم الاتصال بك هاتفياً،\nوسيكون التواصل حصراً عبر الواتساب وبالوقت الذي يناسبك.\n\nأرسل 1 لإرسال تفاصيل الاحتياجات",
+                    noResponse: "ممتاز، شكراً لتوضيحك 🌿\nإذا أحببت، يمكننا أن نرسل لك من وقت لآخر العروض الجديدة\nوالعقارات المتاحة للإيجار عبر الواتساب فقط.\n\nلن يتم أي تواصل عبر مكالمات،\nوالقرار دائماً بيدك إن رغبت بالمتابعة أو التوقف.\n\nأرسل 1 للموافقة على التحديثات\nأرسل 2 للرفض",
+                    askDetails: "ممتاز! يرجى إرسال تفاصيل احتياجاتك:\n- نوع العقار المطلوب (شقة، فيلا، مكتب، إلخ)\n- الموقع المفضل\n- الميزانية الشهرية\n- مدة الإيجار\n- أي متطلبات إضافية",
+                    updatesConfirmed: "شكراً لك! تم تسجيلك في قائمة التحديثات 📋\nستصلك العروض الجديدة والعقارات المتاحة للإيجار عبر الواتساب فقط",
+                    updatesDeclined: "لا مشكلة، شكراً لك! 🙏\nإذا غيرت رأيك في المستقبل، يمكنك التواصل معنا",
+                    thank: "شكراً لك 🌹\nتم تسجيل معلوماتك وسيتم التواصل معك قريباً"
+                },
+                en: {
+                    fireMessage: "Hello [NAME] 👋\nWe specialize in property rentals in Abu Dhabi.\nAre you looking for a property to rent or do you have a property to rent out?\n\nFor yes send 1, for no send 2\n\nNote: Your number will be kept safe and will not be shared with anyone.\nAll offers and properties will only be sent via WhatsApp and with your consent\n\nمرحباً [NAME] 👋\nنحن متخصصون في تأجير العقارات في أبوظبي.\nهل تبحث عن عقار للإيجار أو لديك عقار للتأجير؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع العروض والعقارات ستصلك فقط عبر الواتساب وبموافقتك",
+                    chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "Thank you for your reply 🙏\nTo help you better, please share a few details about your needs\n(property type, preferred location, budget, duration).\n\nRest assured, we will not call you by phone.\nAll communication will remain through WhatsApp, at a time convenient for you.\n\nSend 1 to send requirements details",
+                    noResponse: "Thank you for clarifying 🌿\nIf you'd like, we can share with you from time to time the latest offers\nand available rental properties through WhatsApp only.\n\nNo calls, no interruptions — you decide if and when to continue.\n\nSend 1 to receive updates\nSend 2 to decline",
+                    askDetails: "Excellent! Please send your requirements:\n- Property type needed (apartment, villa, office, etc.)\n- Preferred location\n- Monthly budget\n- Rental duration\n- Any additional requirements",
+                    updatesConfirmed: "Thank you! You've been added to our updates list 📋\nYou'll receive new offers and available rental properties via WhatsApp only",
+                    updatesDeclined: "No problem, thank you! 🙏\nIf you change your mind in the future, you can contact us",
+                    thank: "Thank you 🌹\nYour information has been registered and we will contact you soon"
+                }
+            },
+            investment: {
+                ar: {
+                    fireMessage: "مرحباً [NAME] 👋\nنحن متخصصون في الاستثمار العقاري في أبوظبي.\nهل تفكر في الاستثمار في العقارات أو لديك عقار للاستثمار؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع الفرص الاستثمارية ستصلك فقط عبر الواتساب وبموافقتك\n\nHello [NAME] 👋\nWe specialize in real estate investment in Abu Dhabi.\nAre you thinking of investing in real estate or do you have a property for investment?\n\nFor yes send 1, for no send 2\n\nNote: Your number will be kept safe and will not be shared with anyone.\nAll investment opportunities will only be sent via WhatsApp and with your consent",
+                    chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "شكراً لردك 🙏\nحتى نساعدك بشكل أفضل، ممكن تشاركنا تفاصيل استثمارك\n(نوع الاستثمار، الميزانية، المدة، المخاطر المقبولة).\n\nاطمئن، لن يتم الاتصال بك هاتفياً،\nوسيكون التواصل حصراً عبر الواتساب وبالوقت الذي يناسبك.\n\nأرسل 1 لإرسال تفاصيل الاستثمار",
+                    noResponse: "ممتاز، شكراً لتوضيحك 🌿\nإذا أحببت، يمكننا أن نرسل لك من وقت لآخر الفرص الاستثمارية\nوالعقارات المناسبة للاستثمار عبر الواتساب فقط.\n\nلن يتم أي تواصل عبر مكالمات،\nوالقرار دائماً بيدك إن رغبت بالمتابعة أو التوقف.\n\nأرسل 1 للموافقة على التحديثات\nأرسل 2 للرفض",
+                    askDetails: "ممتاز! يرجى إرسال تفاصيل الاستثمار:\n- نوع الاستثمار المطلوب (عقار سكني، تجاري، أرض، إلخ)\n- الميزانية المتاحة\n- مدة الاستثمار\n- مستوى المخاطر المقبول\n- أي متطلبات إضافية",
+                    updatesConfirmed: "شكراً لك! تم تسجيلك في قائمة التحديثات 📋\nستصلك الفرص الاستثمارية والعقارات المناسبة عبر الواتساب فقط",
+                    updatesDeclined: "لا مشكلة، شكراً لك! 🙏\nإذا غيرت رأيك في المستقبل، يمكنك التواصل معنا",
+                    thank: "شكراً لك 🌹\nتم تسجيل معلوماتك وسيتم التواصل معك قريباً"
+                },
+                en: {
+                    fireMessage: "Hello [NAME] 👋\nWe specialize in real estate investment in Abu Dhabi.\nAre you thinking of investing in real estate or do you have a property for investment?\n\nFor yes send 1, for no send 2\n\nNote: Your number will be kept safe and will not be shared with anyone.\nAll investment opportunities will only be sent via WhatsApp and with your consent\n\nمرحباً [NAME] 👋\nنحن متخصصون في الاستثمار العقاري في أبوظبي.\nهل تفكر في الاستثمار في العقارات أو لديك عقار للاستثمار؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع الفرص الاستثمارية ستصلك فقط عبر الواتساب وبموافقتك",
+                    chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                    yesResponse: "Thank you for your reply 🙏\nTo help you better, please share a few details about your investment\n(investment type, budget, duration, risk tolerance).\n\nRest assured, we will not call you by phone.\nAll communication will remain through WhatsApp, at a time convenient for you.\n\nSend 1 to send investment details",
+                    noResponse: "Thank you for clarifying 🌿\nIf you'd like, we can share with you from time to time investment opportunities\nand suitable properties for investment through WhatsApp only.\n\nNo calls, no interruptions — you decide if and when to continue.\n\nSend 1 to receive updates\nSend 2 to decline",
+                    askDetails: "Excellent! Please send investment details:\n- Investment type needed (residential, commercial, land, etc.)\n- Available budget\n- Investment duration\n- Acceptable risk level\n- Any additional requirements",
+                    updatesConfirmed: "Thank you! You've been added to our updates list 📋\nYou'll receive investment opportunities and suitable properties via WhatsApp only",
+                    updatesDeclined: "No problem, thank you! 🙏\nIf you change your mind in the future, you can contact us",
+                    thank: "Thank you 🌹\nYour information has been registered and we will contact you soon"
+                }
+            }
+        };
+        
+        // All templates storage
+        let templates = JSON.parse(JSON.stringify(businessTemplates));
+        
+        async function loadTemplate() {
+            currentTemplate = document.getElementById('templateSelect').value;
+            
+            // Try to load from database first
+            try {
+                const response = await fetch(`/api/templates/${currentTemplate}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Load template from database
+                    templates[currentTemplate] = result.template.data;
+                    loadAllMessages();
+                    showStatus(`✅ Loaded template: ${currentTemplate} from database`, 'success');
+                } else {
+                    // Fallback to local template
+                    loadAllMessages();
+                    showStatus(`⚠️ Template not found in database, using local: ${currentTemplate}`, 'warning');
+                }
+            } catch (error) {
+                // Fallback to local template
+                loadAllMessages();
+                showStatus(`⚠️ Error loading from database, using local: ${currentTemplate}`, 'warning');
+            }
+        }
+        
+        function createNewTemplate() {
+            const templateName = document.getElementById('newTemplateName').value.trim();
+            if (!templateName) {
+                showStatus('Please enter a template name', 'error');
+                return;
+            }
+            
+            if (templates[templateName]) {
+                showStatus('Template already exists', 'error');
+                return;
+            }
+            
+            // Create new template based on realestate template
+            templates[templateName] = JSON.parse(JSON.stringify(businessTemplates.realestate));
+            
+            // Add to select dropdown
+            const select = document.getElementById('templateSelect');
+            const option = document.createElement('option');
+            option.value = templateName;
+            option.textContent = templateName;
+            select.appendChild(option);
+            
+            // Select the new template
+            select.value = templateName;
+            currentTemplate = templateName;
+            
+            // Clear input
+            document.getElementById('newTemplateName').value = '';
+            
+            // Load the new template
+            loadAllMessages();
+            
+            showStatus(`Created new template: ${templateName}`, 'success');
+        }
+        
+        function duplicateTemplate() {
+            const templateName = document.getElementById('newTemplateName').value.trim();
+            if (!templateName) {
+                showStatus('Please enter a template name', 'error');
+                return;
+            }
+            
+            if (templates[templateName]) {
+                showStatus('Template already exists', 'error');
+                return;
+            }
+            
+            // Duplicate current template
+            templates[templateName] = JSON.parse(JSON.stringify(templates[currentTemplate]));
+            
+            // Add to select dropdown
+            const select = document.getElementById('templateSelect');
+            const option = document.createElement('option');
+            option.value = templateName;
+            option.textContent = templateName;
+            select.appendChild(option);
+            
+            // Select the new template
+            select.value = templateName;
+            currentTemplate = templateName;
+            
+            // Clear input
+            document.getElementById('newTemplateName').value = '';
+            
+            // Load the duplicated template
+            loadAllMessages();
+            
+            showStatus(`Duplicated template: ${templateName}`, 'success');
+        }
+        
+        function deleteTemplate() {
+            if (['luxury', 'firsttime', 'expat', 'investor'].includes(currentTemplate)) {
+                showStatus('Cannot delete built-in templates', 'error');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete template: ${currentTemplate}?`)) {
+                // Remove from templates
+                delete templates[currentTemplate];
+                
+                // Remove from select dropdown
+                const select = document.getElementById('templateSelect');
+                const option = select.querySelector(`option[value="${currentTemplate}"]`);
+                if (option) {
+                    option.remove();
+                }
+                
+                // Switch to luxury template
+                select.value = 'luxury';
+                currentTemplate = 'luxury';
+                
+                // Load default template
+                loadAllMessages();
+                
+                showStatus(`Deleted template: ${currentTemplate}`, 'success');
+            }
+        }
+
+        async function setAsDefault() {
+            const templateName = document.getElementById('templateSelect').value;
+            
+            try {
+                const response = await fetch('/api/templates/set-active', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        templateName: templateName
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ Template "${templateName}" set as default (active)`, 'success');
+                    // Refresh the template list to show which is active
+                    loadAllTemplatesFromDatabase();
+                    
+                    // Reload the active template in the bot
+                    try {
+                        const reloadResponse = await fetch('/api/templates/reload', {
+                            method: 'POST'
+                        });
+                        const reloadResult = await reloadResponse.json();
+                        if (reloadResult.success) {
+                            showStatus(`✅ Template "${templateName}" set as default and reloaded in bot`, 'success');
+                        } else {
+                            showStatus(`⚠️ Template set as default but failed to reload in bot: ${reloadResult.error}`, 'warning');
+                        }
+                    } catch (reloadError) {
+                        showStatus(`⚠️ Template set as default but failed to reload in bot: ${reloadError.message}`, 'warning');
+                    }
+                } else {
+                    showStatus(`❌ Failed to set as default: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Error setting as default: ${error.message}`, 'error');
+            }
+        }
+        
+        function loadAllMessages() {
+            currentLanguage = document.getElementById('language').value;
+            
+            // Load all messages for the selected language and template
+            const messageTypes = ['fireMessage', 'chooseLang', 'yesResponse', 'noResponse', 'askDetails', 'updatesConfirmed', 'updatesDeclined', 'thank'];
+            
+            messageTypes.forEach(type => {
+                if (templates[currentTemplate] && templates[currentTemplate][currentLanguage] && templates[currentTemplate][currentLanguage][type]) {
+                    document.getElementById(type).value = templates[currentTemplate][currentLanguage][type];
+                }
+            });
+        }
+        
+        function validateTemplate() {
+            const fireMessage = document.getElementById('fireMessage').value;
+            const yesResponse = document.getElementById('yesResponse').value;
+            const noResponse = document.getElementById('noResponse').value;
+            
+            let errors = [];
+            let warnings = [];
+            
+            // Check for [NAME] placeholder in fire message
+            if (fireMessage && !fireMessage.includes('[NAME]')) {
+                errors.push('Fire message must include [NAME] placeholder');
+            }
+            
+            // Check for "1" and "2" instructions in responses
+            if (yesResponse && !yesResponse.includes('1')) {
+                warnings.push('Yes response should mention "1" for user response');
+            }
+            
+            if (noResponse && !noResponse.includes('2')) {
+                warnings.push('No response should mention "2" for user response');
+            }
+            
+            // Check for bilingual content
+            const hasArabic = fireMessage.includes('أ') || fireMessage.includes('ب') || fireMessage.includes('ت');
+            const hasEnglish = /[a-zA-Z]/.test(fireMessage);
+            
+            if (fireMessage && (!hasArabic || !hasEnglish)) {
+                warnings.push('Fire message should be bilingual (Arabic and English)');
+            }
+            
+            // Show results
+            if (errors.length === 0 && warnings.length === 0) {
+                showStatus('✅ Template validation passed! All required elements are present.', 'success');
+            } else if (errors.length > 0) {
+                showStatus('❌ Validation Errors: ' + errors.join(', '), 'error');
+            } else {
+                showStatus('⚠️ Validation Warnings: ' + warnings.join(', '), 'warning');
+            }
+            
+            return errors;
+        }
+        
+        async function saveAllMessages() {
+            currentLanguage = document.getElementById('language').value;
+            
+            // Validate template before saving
+            const validationErrors = validateTemplate();
+            if (validationErrors.length > 0) {
+                showStatus('Validation Errors: ' + validationErrors.join(', '), 'error');
+                return;
+            }
+            
+            // Save all messages for the selected language and template
+            const messageTypes = ['fireMessage', 'chooseLang', 'yesResponse', 'noResponse', 'askDetails', 'updatesConfirmed', 'updatesDeclined', 'thank'];
+            let savedCount = 0;
+            
+            // Ensure template exists
+            if (!templates[currentTemplate]) {
+                templates[currentTemplate] = JSON.parse(JSON.stringify(businessTemplates.luxury));
+            }
+            
+            // Ensure language exists in template
+            if (!templates[currentTemplate][currentLanguage]) {
+                templates[currentTemplate][currentLanguage] = {};
+            }
+            
+            messageTypes.forEach(type => {
+                const messageText = document.getElementById(type).value.trim();
+                if (messageText) {
+                    templates[currentTemplate][currentLanguage][type] = messageText;
+                    savedCount++;
+                }
+            });
+            
+            // Save to database
+            try {
+                const response = await fetch('/api/templates/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        templateName: currentTemplate,
+                        templateData: templates[currentTemplate]
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ Saved ${savedCount} messages for ${currentLanguage.toUpperCase()} in template: ${currentTemplate} to database`, 'success');
+                } else {
+                    showStatus(`❌ Failed to save to database: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Error saving to database: ${error.message}`, 'error');
+            }
+        }
+        
+        function resetAllMessages() {
+            if (confirm('Are you sure you want to reset ALL messages to default? This will overwrite all your changes.')) {
+                currentLanguage = document.getElementById('language').value;
+                
+                // Reset to original template messages
+                const messageTypes = ['fireMessage', 'chooseLang', 'yesResponse', 'noResponse', 'askDetails', 'updatesConfirmed', 'updatesDeclined', 'thank'];
+                
+                messageTypes.forEach(type => {
+                    if (businessTemplates[currentTemplate] && businessTemplates[currentTemplate][currentLanguage] && businessTemplates[currentTemplate][currentLanguage][type]) {
+                        document.getElementById(type).value = businessTemplates[currentTemplate][currentLanguage][type];
+                        templates[currentTemplate][currentLanguage][type] = businessTemplates[currentTemplate][currentLanguage][type];
+                    }
+                });
+                
+                showStatus(`Reset all messages to default for ${currentLanguage.toUpperCase()} in ${currentTemplate} template`, 'success');
+            }
+        }
+        
+        function previewCompleteFlow() {
+            currentLanguage = document.getElementById('language').value;
+            
+            let flowPreview = `🔄 COMPLETE CONVERSATION FLOW (${currentLanguage.toUpperCase()})\n\n`;
+            flowPreview += `🔥 Step 1: Fire Message (Bulk Message)\n`;
+            flowPreview += `"${document.getElementById('fireMessage').value || 'No message set'}"\n\n`;
+            flowPreview += `📱 Step 2: User responds with 1 or 2\n\n`;
+            flowPreview += `🌍 Step 3: Language Selection\n`;
+            flowPreview += `"${document.getElementById('chooseLang').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `📋 Step 4: Response Processing\n\n`;
+            flowPreview += `✅ If user sent 1 (Yes):\n`;
+            flowPreview += `"${document.getElementById('yesResponse').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `📝 Step 5a: Details Request\n`;
+            flowPreview += `"${document.getElementById('askDetails').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `❌ If user sent 2 (No):\n`;
+            flowPreview += `"${document.getElementById('noResponse').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `📋 Step 5b: Updates Choice\n`;
+            flowPreview += `If user wants updates:\n`;
+            flowPreview += `"${document.getElementById('updatesConfirmed').value || 'No message set'}"\n\n`;
+            flowPreview += `If user doesn't want updates:\n`;
+            flowPreview += `"${document.getElementById('updatesDeclined').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `🙏 Final Step: Thank You\n`;
+            flowPreview += `"${document.getElementById('thank').value || 'No message set'}"\n\n`;
+            
+            flowPreview += `✅ Flow Complete - User data collected and stored!`;
+            
+            document.getElementById('flowPreview').textContent = flowPreview;
+        }
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Initialize
+        async function loadAllTemplatesFromDatabase() {
+            try {
+                const response = await fetch('/api/templates');
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Update templates with database data
+                    result.templates.forEach(template => {
+                        templates[template.name] = template.data;
+                    });
+                    
+                    // Get active template
+                    const activeResponse = await fetch('/api/templates/active');
+                    const activeResult = await activeResponse.json();
+                    const activeTemplateName = activeResult.success ? activeResult.template.name : null;
+                    
+                    // Update template dropdown
+                    const select = document.getElementById('templateSelect');
+                    select.innerHTML = ''; // Clear existing options
+                    
+                    // Add built-in templates
+                    const builtInTemplates = [
+                        { value: 'luxury', text: '🏰 Luxury Properties' },
+                        { value: 'firsttime', text: '🏠 First-Time Buyers' },
+                        { value: 'expat', text: '🌍 Expat Relocation' },
+                        { value: 'investor', text: '💎 Smart Investors' }
+                    ];
+                    
+                    builtInTemplates.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.value;
+                        option.textContent = template.value === activeTemplateName ? 
+                            `⭐ ${template.text} (ACTIVE)` : template.text;
+                        select.appendChild(option);
+                    });
+                    
+                    // Add database templates
+                    result.templates.forEach(template => {
+                        if (!builtInTemplates.find(t => t.value === template.name)) {
+                            const option = document.createElement('option');
+                            option.value = template.name;
+                            option.textContent = template.name === activeTemplateName ? 
+                                `⭐ 📝 ${template.name} (ACTIVE)` : `📝 ${template.name}`;
+                            select.appendChild(option);
+                        }
+                    });
+                    
+                    showStatus(`✅ Loaded ${result.templates.length} templates from database${activeTemplateName ? ` (Active: ${activeTemplateName})` : ''}`, 'success');
+                } else {
+                    showStatus(`⚠️ Could not load templates from database: ${result.error}`, 'warning');
+                }
+            } catch (error) {
+                showStatus(`⚠️ Error loading templates from database: ${error.message}`, 'warning');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default language
+            document.getElementById('language').value = 'ar';
+            currentLanguage = 'ar';
+            
+            // Load templates from database first, then load messages
+            loadAllTemplatesFromDatabase().then(() => {
+                loadAllMessages();
+            });
+        });
+    </script>
+</body>
+</html>

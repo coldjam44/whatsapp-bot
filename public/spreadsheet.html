@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phone Numbers Spreadsheet - Bot Dashboard</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -300,6 +301,8 @@
         <div class="nav">
             <a href="/">🏠 Dashboard</a>
             <a href="/spreadsheet">📊 Spreadsheet</a>
+            <a href="/message-editor">📝 Message Editor</a>
+            <a href="/template-manager">⚙️ Template Manager</a>
         </div>
         
         <div class="instructions">
@@ -323,6 +326,7 @@
             <button class="btn btn-primary" onclick="sendMessages()">📤 Send Messages</button>
             <button class="btn btn-secondary" onclick="clearLog()">🗑️ Clear Log</button>
             <button class="btn btn-info" onclick="downloadTemplate()">📥 Download Template</button>
+            <button class="btn btn-success" onclick="exportData()">📊 Export Data</button>
             <input type="file" id="templateUpload" accept=".xlsx,.csv" style="display: none;" onchange="uploadTemplate(this)">
             <button class="btn btn-warning" onclick="document.getElementById('templateUpload').click()">📤 Upload Number Template</button>
         </div>
@@ -786,6 +790,72 @@
             showStatus('Excel template downloaded!', 'success');
         }
 
+        // Export Data with existing contacts as Excel
+        async function exportData() {
+            try {
+                addLogEntry('📊 Exporting data with existing contacts as Excel...', 'info');
+                
+                // Get all contacts from database
+                const response = await fetch('/api/contacts');
+                const result = await response.json();
+                
+                if (!result.success || !result.contacts) {
+                    addLogEntry('❌ No contacts found to export', 'error');
+                    showStatus('No contacts found to export', 'error');
+                    return;
+                }
+                
+                const contacts = result.contacts;
+                addLogEntry(`📋 Found ${contacts.length} contacts to export`, 'info');
+                
+                // Create Excel workbook using XLSX library
+                const XLSX = window.XLSX || await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+                
+                // Prepare data for Excel
+                const excelData = contacts.map(contact => ({
+                    'Phone': contact.phone || '',
+                    'Name': contact.name || '',
+                    'Source': contact.source || '',
+                    'Notes': contact.notes || '',
+                    'Added Date': contact.added_at ? new Date(contact.added_at).toLocaleDateString() : '',
+                    'Last Message': contact.last_message || '',
+                    'Message Count': contact.message_count || 0
+                }));
+                
+                // Create workbook and worksheet
+                const workbook = XLSX.utils.book_new();
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                
+                // Add worksheet to workbook
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Contacts');
+                
+                // Generate Excel file
+                const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                
+                // Create and download the file
+                const blob = new Blob([excelBuffer], { 
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+                });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                link.setAttribute('href', url);
+                link.setAttribute('download', `contacts_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+                link.style.visibility = 'hidden';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                addLogEntry(`✅ Successfully exported ${contacts.length} contacts to Excel`, 'success');
+                showStatus(`Exported ${contacts.length} contacts to Excel successfully!`, 'success');
+                
+            } catch (error) {
+                addLogEntry(`❌ Error exporting data: ${error.message}`, 'error');
+                showStatus('Error exporting data', 'error');
+            }
+        }
+
         // Upload Template
         function uploadTemplate(input) {
             const file = input.files[0];
@@ -839,12 +909,34 @@
                 const contacts = result.contacts;
                 addLogEntry(`📋 Found ${contacts.length} contacts to send messages to`, 'info');
                 
+                // Get active template fire message
+                let defaultMessage = 'Hello [NAME] 👋\nWe are contacting people interested in buying properties in Abu Dhabi.\nDo you have a property you are thinking of selling?\n\nFor yes send 1, for no send 2\n\nNote: Your number is saved and will not be shared with any party.\nAll updates and offers will be sent to you only via WhatsApp and with your consent\n\nمرحباً [NAME] 👋\nنحن على تواصل مع أشخاص مهتمين بشراء عقارات في أبوظبي.\nهل لديك عقار تفكر في عرضه للبيع حالياً؟\n\nللنعم أرسل 1، لللا أرسل 2\n\nملاحظة: رقمك محفوظ ولن يُشارك مع أي طرف.\nوجميع التحديثات والعروض ستصلك فقط عبر الواتساب وبموافقتك';
+                
+                try {
+                    const templateResponse = await fetch('/api/templates/active');
+                    if (templateResponse.ok) {
+                        const templateData = await templateResponse.json();
+                        if (templateData.success && templateData.template) {
+                            const template = templateData.template.data;
+                            // Combine Arabic and English fire messages
+                            const arMessage = template.ar?.fireMessage || '';
+                            const enMessage = template.en?.fireMessage || '';
+                            if (arMessage && enMessage) {
+                                defaultMessage = `${enMessage}\n\n${arMessage}`;
+                                addLogEntry('✅ Using fire message from active template', 'success');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    addLogEntry('⚠️ Could not fetch active template, using default message', 'warning');
+                }
+                
                 // Calculate sending time
                 const sendingTime = calculateSendingTime(contacts.length);
                 addLogEntry(`⏱️ Estimated sending time: ${sendingTime.formatted} (${sendingTime.perMessage}s between messages)`, 'info');
                 
                 // Show message input popup
-                const message = prompt(`Enter message to send to ${contacts.length} contacts:\n\nEstimated time: ${sendingTime.formatted}`, 'Hello! This is a message from our real estate bot. We have amazing properties available. Would you like to know more?');
+                const message = prompt(`Enter message to send to ${contacts.length} contacts:\n\nEstimated time: ${sendingTime.formatted}`, defaultMessage);
                 
                 if (message === null) {
                     addLogEntry('❌ Message sending cancelled by user', 'warning');
@@ -866,6 +958,14 @@
                     addLogEntry(`📤 Sending message ${i + 1}/${contacts.length} to ${contact.phone}...`, 'info');
                     
                     try {
+                        // Personalize message with contact name
+                        let personalizedMessage = message;
+                        if (contact.name && contact.name.trim()) {
+                            personalizedMessage = message.replace(/\[NAME\]/g, contact.name.trim());
+                        } else {
+                            personalizedMessage = message.replace(/\[NAME\]/g, 'Hi');
+                        }
+                        
                         const sendResponse = await fetch('/api/send-message', {
                             method: 'POST',
                             headers: {
@@ -873,7 +973,7 @@
                             },
                             body: JSON.stringify({
                                 phone: contact.phone,
-                                message: message
+                                message: personalizedMessage
                             })
                         });
                         

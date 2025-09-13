@@ -1,121 +1,210 @@
-// replays.js - Real Estate Bot Reply System
+// replays.js - Fire Message Response Handler
+import MySQLDatabase from './mysql_database.js';
+
 export default function registerMessageHandlers(client) {
+    console.log('🚀 REPLAYS.JS LOADED - Starting message handler registration...');
+    
     // User states management
     let userStates = {};
     let userData = [];
     let completedUsers = [];
   
-    // Regex for numbers (Arabic + English)
+    // Initialize database connection
+    const mysqlDB = new MySQLDatabase();
+    mysqlDB.connect();
+  
+    // Regex for numbers (Arabic + English) - more flexible
     const numberRegex = /^[0-9\u0660-\u0669]+$/;
-  
-    // API Configuration
-    const API_BASE_URL = 'https://realestate.azsystems.tech';
     
-    // Fetch offers from API (always fresh, no caching)
-    const fetchOffers = async () => {
+    // Function to normalize numbers (convert Arabic to English)
+    const normalizeNumber = (text) => {
+        return text
+            .replace(/\u0660/g, '0')
+            .replace(/\u0661/g, '1')
+            .replace(/\u0662/g, '2')
+            .replace(/\u0663/g, '3')
+            .replace(/\u0664/g, '4')
+            .replace(/\u0665/g, '5')
+            .replace(/\u0666/g, '6')
+            .replace(/\u0667/g, '7')
+            .replace(/\u0668/g, '8')
+            .replace(/\u0669/g, '9');
+    };
+  
+    // Load active template from database
+    let activeTemplate = null;
+    
+    async function loadActiveTemplate() {
         try {
-            console.log('🌐 Fetching fresh offers from API...');
-            const response = await fetch(`${API_BASE_URL}/api/bot/offers`);
-            
-            if (!response.ok) {
-                throw new Error(`API request failed: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (data.success && data.data && Array.isArray(data.data)) {
-                console.log(`✅ Fetched ${data.count} fresh offers from API`);
-                return data.data;
+            console.log('🔧 Calling mysqlDB.getActiveTemplate()...');
+            const result = await mysqlDB.getActiveTemplate();
+            console.log('🔧 getActiveTemplate result:', result);
+            if (result.success) {
+                activeTemplate = result.template.data;
+                console.log(`✅ Loaded active template: ${result.template.name}`);
             } else {
-                throw new Error('Invalid API response format');
+                console.log('⚠️ No active template found, using default');
+                // Use default template if none is active
+                activeTemplate = getDefaultTemplate();
             }
-            
         } catch (error) {
-            console.error('❌ Error fetching offers from API:', error.message);
-            
-            // Return fallback offers if API fails
-            return [
-                {
-                    display_text_ar: "عرض احتياطي - فيلا راقية 500م²",
-                    display_text_en: "Fallback Offer - Luxury Villa 500m²"
-                },
-                {
-                    display_text_ar: "عرض احتياطي - شقة فاخرة مطلة على البحر",
-                    display_text_en: "Fallback Offer - Luxury Sea View Apartment"
-                }
-            ];
+            console.error('❌ Error loading active template:', error);
+            activeTemplate = getDefaultTemplate();
         }
-    };
+    }
     
-    // Generate offers text based on language and fetched data
-    const generateOffersText = (offers, lang) => {
-        if (!offers || offers.length === 0) {
-            return lang === 'ar' ? "عذراً، لا توجد عروض متاحة حالياً" : "Sorry, no offers available at the moment";
-        }
-        
-        let offersText = lang === 'ar' ? "القائمة:\n" : "List:\n";
-        
-        offers.forEach((offer, index) => {
-            const emoji = index === 0 ? "💎" : index === 1 ? "🌊" : "🏢";
-            const offerText = lang === 'ar' ? offer.display_text_ar : offer.display_text_en;
-            
-            if (lang === 'ar') {
-                offersText += `${index + 1}️⃣ عرض رقم ${index + 1}: ${offerText} ${emoji}\n`;
-            } else {
-                offersText += `${index + 1}️⃣ Offer ${index + 1}: ${offerText} ${emoji}\n`;
+    function getDefaultTemplate() {
+        return {
+            ar: {
+                chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                yesResponse: "شكراً لردك 🙏\nحتى نساعدك بشكل أفضل، ممكن تشاركنا تفاصيل العقار\n(الموقع، نوع العقار، والسعر المتوقع).\n\nاطمئن، لن يتم الاتصال بك هاتفياً،\nوسيكون التواصل حصراً عبر الواتساب وبالوقت الذي يناسبك.\n\nأرسل 1 لإرسال تفاصيل العقار",
+                noResponse: "ممتاز، شكراً لتوضيحك 🌿\nإذا أحببت، يمكننا أن نرسل لك من وقت لآخر المشاريع الجديدة\nوالفرص العقارية المناسبة عبر الواتساب فقط.\n\nلن يتم أي تواصل عبر مكالمات،\nوالقرار دائماً بيدك إن رغبت بالمتابعة أو التوقف.\n\nأرسل 1 للموافقة على التحديثات\nأرسل 2 للرفض",
+                askDetails: "ممتاز! يرجى إرسال تفاصيل العقار:\n- الموقع\n- نوع العقار (فيلا، شقة، أرض، إلخ)\n- المساحة\n- السعر المتوقع\n- أي تفاصيل إضافية",
+                updatesConfirmed: "شكراً لك! تم تسجيلك في قائمة التحديثات 📋\nستصلك العروض الجديدة والفرص العقارية عبر الواتساب فقط",
+                updatesDeclined: "لا مشكلة، شكراً لك! 🙏\nإذا غيرت رأيك في المستقبل، يمكنك التواصل معنا",
+                thank: "شكراً لك 🌹\nتم تسجيل معلوماتك وسيتم التواصل معك قريباً",
+                invalid: "الرجاء إرسال رقم صحيح (1 أو 2)",
+                invalidLang: "الرجاء إرسال 1 للعربية أو 2 للإنجليزية"
+            },
+            en: {
+                chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+                yesResponse: "Thank you for your reply 🙏\nTo help you better, please share a few details about your property\n(location, type, and expected price).\n\nRest assured, we will not call you by phone.\nAll communication will remain through WhatsApp, at a time convenient for you.\n\nSend 1 to send property details",
+                noResponse: "Thank you for clarifying 🌿\nIf you'd like, we can share with you from time to time the latest projects\nand property opportunities through WhatsApp only.\n\nNo calls, no interruptions — you decide if and when to continue.\n\nSend 1 to receive updates\nSend 2 to decline",
+                askDetails: "Excellent! Please send property details:\n- Location\n- Property type (villa, apartment, land, etc.)\n- Area\n- Expected price\n- Any additional details",
+                updatesConfirmed: "Thank you! You've been added to our updates list 📋\nYou'll receive new offers and property opportunities via WhatsApp only",
+                updatesDeclined: "No problem, thank you! 🙏\nIf you change your mind in the future, feel free to contact us",
+                thank: "Thank you 🌹\nYour information has been recorded and we'll contact you soon",
+                invalid: "Please send a valid number (1 or 2)",
+                invalidLang: "Please send 1 for Arabic or 2 for English"
             }
-        });
+        };
+    }
+    
+    // Load active template on startup
+    console.log('🔧 Loading active template...');
+    loadActiveTemplate().then(() => {
+        console.log('✅ Active template loaded successfully');
+    }).catch((error) => {
+        console.error('❌ Error loading active template:', error);
+    });
+    
+    console.log('🔧 Continuing execution after template loading...');
+    
+    // Helper function to get current template
+    function getCurrentTemplate() {
+        return activeTemplate || getDefaultTemplate();
+    }
+    
+    // Function to reload active template (can be called periodically)
+    async function reloadActiveTemplate() {
+        const oldTemplate = activeTemplate;
+        const oldTemplateName = oldTemplate ? 'previous' : 'none';
         
-        offersText += lang === 'ar' ? "أرسل أي رقم لاختيار العرض" : "Send any number to choose an offer";
+        await loadActiveTemplate();
         
-        return offersText;
-    };
-  
-    // Language-specific texts/templates
+        const newTemplateName = activeTemplate ? 'current' : 'none';
+        
+        console.log(`🔧 Template reload: ${oldTemplateName} -> ${newTemplateName}`);
+        
+        // Always reset user states when template is reloaded to ensure fresh conversations
+        console.log('🔄 Template reloaded, resetting all user states for fresh conversations...');
+        userStates = {};
+        completedUsers = [];
+        userData = [];
+        console.log('✅ All user states reset - users can start new conversations');
+    }
+    
+    // Reload template every 5 minutes to pick up changes
+    setInterval(async () => {
+        await reloadActiveTemplate();
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    // Language-specific texts/templates (fallback)
     const texts = {
         ar: {
-            askName: (num, offerText) => `تمام ✅ اخترت عرض رقم ${num}\n${offerText}\nبرجاء كتابة اسمك فقط`,
-            askPhone: (name) => `شكرًا لك ${name}.\nالآن أرسل رقم جوالك`,
-            thank: "شكرًا لك 🌹 سيتم التواصل معك قريبًا",
-            invalid: "أرسل رقم لعرض العروض",
-            welcome: "مرحبا بك في العقارية 🌟\nنقدم عروض مميزة\nأرسل أي رقم لعرض العروض",
-            welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
-            invalidNumber: "❌ الرجاء إدخال رقم صالح",
-            validNumber: "أرسل رقم صالح",
-            loadingOffers: "⏳ جاري تحميل العروض...",
-            noOffersAskName: "عذراً، لا توجد عروض متاحة حالياً 📋\nلكن يمكننا إرسال العروض الجديدة لك مباشرة\nبرجاء كتابة اسمك"
+            // Language selection
+            chooseLang: "أهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nWelcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+            
+            // Yes response (has property)
+            yesResponse: "شكراً لردك 🙏\nحتى نساعدك بشكل أفضل، ممكن تشاركنا تفاصيل العقار\n(الموقع، نوع العقار، والسعر المتوقع).\n\nاطمئن، لن يتم الاتصال بك هاتفياً،\nوسيكون التواصل حصراً عبر الواتساب وبالوقت الذي يناسبك.\n\nأرسل 1 لإرسال تفاصيل العقار",
+            
+            // No response (no property)
+            noResponse: "ممتاز، شكراً لتوضيحك 🌿\nإذا أحببت، يمكننا أن نرسل لك من وقت لآخر المشاريع الجديدة\nوالفرص العقارية المناسبة عبر الواتساب فقط.\n\nلن يتم أي تواصل عبر مكالمات،\nوالقرار دائماً بيدك إن رغبت بالمتابعة أو التوقف.\n\nأرسل 1 للموافقة على التحديثات\nأرسل 2 للرفض",
+            
+            // Property details request
+            askPropertyDetails: "ممتاز! يرجى إرسال تفاصيل العقار:\n- الموقع\n- نوع العقار (فيلا، شقة، أرض، إلخ)\n- المساحة\n- السعر المتوقع\n- أي تفاصيل إضافية",
+            
+            // Updates confirmation
+            updatesConfirmed: "شكراً لك! تم تسجيلك في قائمة التحديثات 📋\nستصلك العروض الجديدة والفرص العقارية عبر الواتساب فقط",
+            
+            // Updates declined
+            updatesDeclined: "لا مشكلة، شكراً لك! 🙏\nإذا غيرت رأيك في المستقبل، يمكنك التواصل معنا",
+            
+            // Thank you
+            thank: "شكراً لك 🌹\nتم تسجيل معلوماتك وسيتم التواصل معك قريباً",
+            
+            // Invalid input
+            invalid: "الرجاء إرسال رقم صحيح (1 أو 2)",
+            invalidLang: "الرجاء إرسال 1 للعربية أو 2 للإنجليزية"
         },
         en: {
-            askName: (num, offerText) => `Great ✅ You chose Offer ${num}\n${offerText}\nPlease enter your name`,
-            askPhone: (name) => `Thank you ${name}.\nNow send your phone number`,
-            thank: "Thank you 🌹 Our sales team will contact you",
-            invalid: "Send a number to view offers",
-            welcome: "مرحبا بك في العقارية 🌟\nنقدم عروض مميزة\nأرسل أي رقم لعرض العروض",
-            welcomeEn: "Welcome to Real Estate 🌟\nWe offer great deals\nSend any number to view offers",
-            invalidNumber: "❌ Please enter a valid number",
-            validNumber: "Send a valid number",
-            loadingOffers: "⏳ Loading offers...",
-            noOffersAskName: "Sorry, no offers are available at the moment 📋\nBut we can send you new offers directly\nPlease enter your name"
+            // Language selection
+            chooseLang: "Welcome 🌟\nPlease choose language:\n1 - العربية 🇸🇦\n2 - English 🇬🇧\n\nأهلاً بك 🌟\nرجاء اختر اللغة:\n1 - العربية 🇸🇦\n2 - English 🇬🇧",
+            
+            // Yes response (has property)
+            yesResponse: "Thank you for your reply 🙏\nTo help you better, please share a few details about your property\n(location, type, and expected price).\n\nRest assured, we will not call you by phone.\nAll communication will remain through WhatsApp, at a time convenient for you.\n\nSend 1 to send property details",
+            
+            // No response (no property)
+            noResponse: "Thank you for clarifying 🌿\nIf you'd like, we can share with you from time to time the latest projects\nand property opportunities through WhatsApp only.\n\nNo calls, no interruptions — you decide if and when to continue.\n\nSend 1 to receive updates\nSend 2 to decline",
+            
+            // Property details request
+            askPropertyDetails: "Excellent! Please send property details:\n- Location\n- Property type (villa, apartment, land, etc.)\n- Area\n- Expected price\n- Any additional details",
+            
+            // Updates confirmation
+            updatesConfirmed: "Thank you! You've been added to our updates list 📋\nYou'll receive new offers and property opportunities via WhatsApp only",
+            
+            // Updates declined
+            updatesDeclined: "No problem, thank you! 🙏\nIf you change your mind in the future, you can contact us",
+            
+            // Thank you
+            thank: "Thank you 🌹\nYour information has been registered and we will contact you soon",
+            
+            // Invalid input
+            invalid: "Please send a valid number (1 or 2)",
+            invalidLang: "Please send 1 for Arabic or 2 for English"
         }
     };
 
-    // Convert Arabic numbers to English
-    const convertArabicNumbers = (text) => {
-        return text.replace(/\u0660/g, '0')
-                  .replace(/\u0661/g, '1')
-                  .replace(/\u0662/g, '2')
-                  .replace(/\u0663/g, '3')
-                  .replace(/\u0664/g, '4')
-                  .replace(/\u0665/g, '5')
-                  .replace(/\u0666/g, '6')
-                  .replace(/\u0667/g, '7')
-                  .replace(/\u0668/g, '8')
-                  .replace(/\u0669/g, '9');
-    };
 
     // Main message handler
+    console.log('🔧 Registering message handler...');
+    console.log('🔧 Client state at registration:', {
+        isReady: client.info ? true : false,
+        hasInfo: !!client.info,
+        pushname: client.info?.pushname || 'NO INFO'
+    });
+    
+    // Check if client is ready
+    if (!client.info) {
+        console.log('⚠️ Client not ready yet, waiting for ready event...');
+        client.once('ready', () => {
+            console.log('🔧 Client is now ready, registering message handler...');
+            registerMessageHandler();
+        });
+        return;
+    }
+    
+    function registerMessageHandler() {
+        try {
     client.on('message', async (message) => {
         try {
+            console.log('🔔 MESSAGE RECEIVED!', {
+                from: message.from,
+                body: message.body,
+                type: message.type,
+                timestamp: new Date().toISOString()
+            });
+            
             // Ignore group messages
             if (message.from.endsWith('@g.us')) {
                 console.log('⛔ Ignoring group message from:', message.from);
@@ -130,164 +219,165 @@ export default function registerMessageHandlers(client) {
                 console.log('✅ User already completed:', from);
                 return;
             }
+            
+            console.log(`🔍 Completed users list:`, completedUsers);
+            console.log(`🔍 User ${from} in completed list: ${completedUsers.includes(from)}`);
 
             console.log(`📱 Processing message from ${from}: "${text}"`);
 
-            // First time: ask for language choice
-            if (!userStates[from]) {
-                userStates[from] = { step: 'CHOOSE_LANG' };
-                console.log(`🌍 New user ${from} - asking for language choice`);
+            // Check if this is a response to fire message (1 or 2) - accept both Arabic and English numbers
+            const normalizedText = normalizeNumber(text);
+            console.log(`🔍 Normalized text: "${normalizedText}"`);
+            console.log(`🔍 User state exists: ${!!userStates[from]}`);
+            console.log(`🔍 Is fire response (1 or 2): ${normalizedText === '1' || normalizedText === '2'}`);
+            
+            if (!userStates[from] && (normalizedText === '1' || normalizedText === '2')) {
+                userStates[from] = { 
+                    step: 'CHOOSE_LANG',
+                    fireResponse: normalizedText // Store the normalized fire message response
+                };
+                console.log(`🔥 User ${from} responded to fire message with: ${text} (normalized: ${normalizedText})`);
                 
-                return await message.reply(
-                    "أهلاً بك 🌟\n" +
-                    "رجاء اختر اللغة:\n" +
-                    "1 - العربية 🇸🇦\n" +
-                    "2 - English 🇬🇧\n" +
-                    "يمكنك إدخال أي رقم من 1 للأعلى"
-                );
+                return await message.reply(getCurrentTemplate().ar.chooseLang);
             }
 
-            // Language selection: accept any number
+            // If no state and not a fire message response, ignore
+            if (!userStates[from]) {
+                console.log(`⏭️ User ${from} sent message but not a fire response, ignoring: "${text}"`);
+                console.log(`🔍 User state:`, userStates[from]);
+                console.log(`🔍 All user states:`, Object.keys(userStates));
+                return;
+            }
+
+            // Language selection - accept both Arabic and English numbers
             if (userStates[from].step === 'CHOOSE_LANG') {
+                const normalizedText = normalizeNumber(text);
                 if (numberRegex.test(text)) {
-                    if (/^(1|١)$/.test(text)) {
+                    if (normalizedText === '1') {
                         userStates[from].lang = 'ar';
-                        userStates[from].step = 'WELCOME';
-                        console.log(`🇸🇦 User ${from} chose Arabic`);
-                        return await message.reply(texts.ar.welcome);
-                    } else {
+                        userStates[from].step = 'PROCESS_FIRE_RESPONSE';
+                        console.log(`🇸🇦 User ${from} chose Arabic (${text} -> ${normalizedText})`);
+                    } else if (normalizedText === '2') {
                         userStates[from].lang = 'en';
-                        userStates[from].step = 'WELCOME';
-                        console.log(`🇬🇧 User ${from} chose English`);
-                        return await message.reply(texts.en.welcomeEn);
+                        userStates[from].step = 'PROCESS_FIRE_RESPONSE';
+                        console.log(`🇬🇧 User ${from} chose English (${text} -> ${normalizedText})`);
+                    } else {
+                        console.log(`❌ User ${from} entered invalid language choice: "${text}" (normalized: ${normalizedText})`);
+                        return await message.reply(getCurrentTemplate().ar.invalidLang);
+                    }
+                    
+                    // Process the fire message response
+                    const fireResponse = userStates[from].fireResponse;
+                    const lang = userStates[from].lang;
+                    
+                    if (fireResponse === '1' || fireResponse === '١') {
+                        // User said YES (has property)
+                        userStates[from].step = 'WAIT_PROPERTY_DETAILS';
+                        console.log(`✅ User ${from} has property, asking for details in ${lang}`);
+                        return await message.reply(getCurrentTemplate()[lang].yesResponse);
+                    } else {
+                        // User said NO (no property)
+                        userStates[from].step = 'WAIT_UPDATE_CHOICE';
+                        console.log(`❌ User ${from} has no property, asking about updates in ${lang}`);
+                        return await message.reply(getCurrentTemplate()[lang].noResponse);
                     }
                 } else {
                     console.log(`❌ User ${from} entered invalid input for language: "${text}"`);
-                    return await message.reply(texts.ar.invalidNumber);
+                    return await message.reply(getCurrentTemplate().ar.invalidLang);
                 }
             }
 
             // Get current language
             const lang = userStates[from].lang;
 
-            // Welcome → Show offers
-            if (userStates[from].step === 'WELCOME') {
-                if (numberRegex.test(text)) {
-                    console.log(`📋 User ${from} proceeding to offers`);
-                    
-                    // Send loading message first
-                    await message.reply(texts[lang].loadingOffers);
-                    
-                    // Fetch offers from API
-                    const offers = await fetchOffers();
-                    
-                    // Check if offers are available
-                    if (offers && offers.length > 0) {
-                        userStates[from].step = 'CHOOSE_OFFER';
-                        const offersText = generateOffersText(offers, lang);
-                        userStates[from].offers = offers;
-                        return await message.reply(offersText);
+            // Wait for property details - accept both Arabic and English numbers
+            if (userStates[from].step === 'WAIT_PROPERTY_DETAILS') {
+                const normalizedText = normalizeNumber(text);
+                if (normalizedText === '1') {
+                    userStates[from].step = 'COLLECT_PROPERTY_DETAILS';
+                    console.log(`📝 User ${from} ready to send property details in ${lang} (${text} -> ${normalizedText})`);
+                    return await message.reply(getCurrentTemplate()[lang].askDetails);
                     } else {
-                        // No offers available - go directly to contact collection
-                        userStates[from].step = 'ASK_NAME';
-                        userStates[from].offer = 'no_offers';
-                        userStates[from].selectedOfferText = lang === 'ar' ? 'لا توجد عروض متاحة حالياً' : 'No offers available at the moment';
-                        
-                        console.log(`📋 User ${from} - No offers available, proceeding to contact collection`);
-                        return await message.reply(texts[lang].noOffersAskName);
-                    }
+                    console.log(`❌ User ${from} invalid input in WAIT_PROPERTY_DETAILS: "${text}" (normalized: ${normalizedText})`);
+                    return await message.reply(getCurrentTemplate()[lang].invalid);
                 }
-                console.log(`❌ User ${from} invalid input in WELCOME step: "${text}"`);
-                return await message.reply(texts[lang].invalid);
             }
 
-            // Choose offer
-            if (userStates[from].step === 'CHOOSE_OFFER') {
-                if (numberRegex.test(text)) {
-                    const offerNum = convertArabicNumbers(text);
-                    const offerIndex = parseInt(offerNum) - 1;
-                    
-                    // Validate offer selection
-                    if (offerIndex >= 0 && offerIndex < userStates[from].offers.length) {
-                        const selectedOffer = userStates[from].offers[offerIndex];
-                        const offerText = lang === 'ar' ? selectedOffer.display_text_ar : selectedOffer.display_text_en;
-                        
-                        userStates[from].step = 'ASK_NAME';
-                        userStates[from].offer = offerNum;
-                        userStates[from].selectedOfferText = offerText;
-                        
-                        console.log(`🏠 User ${from} chose offer ${offerNum}: ${offerText}`);
-                        return await message.reply(texts[lang].askName(offerNum, offerText));
-                    } else {
-                        console.log(`❌ User ${from} chose invalid offer number: ${offerNum}`);
-                        // Fetch fresh offers from API and re-display
-                        const freshOffers = await fetchOffers();
-                        const offersText = generateOffersText(freshOffers, lang);
-                        userStates[from].offers = freshOffers; // Update stored offers
-                        return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
-                    }
-                }
-                console.log(`❌ User ${from} invalid input in CHOOSE_OFFER step: "${text}"`);
-                // Fetch fresh offers from API and re-display
-                const freshOffers = await fetchOffers();
-                const offersText = generateOffersText(freshOffers, lang);
-                userStates[from].offers = freshOffers; // Update stored offers
-                return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
-            }
-
-            // Ask for name
-            if (userStates[from].step === 'ASK_NAME') {
-                userStates[from].name = text;
-                userStates[from].step = 'ASK_PHONE';
-                console.log(`📝 User ${from} provided name: "${text}"`);
-                return await message.reply(texts[lang].askPhone(text));
-            }
-
-            // Ask for phone number
-            if (userStates[from].step === 'ASK_PHONE') {
-                // Store user data with offer details
+            // Collect property details
+            if (userStates[from].step === 'COLLECT_PROPERTY_DETAILS') {
+                // Store user data with property details
                 const userDataEntry = {
                     from,
                     lang,
-                    offer: userStates[from].offer,
-                    selectedOfferText: userStates[from].selectedOfferText,
-                    name: userStates[from].name,
-                    phone: text,
+                    response: 'yes',
+                    propertyDetails: text,
                     timestamp: new Date().toISOString()
                 };
                 
                 userData.push(userDataEntry);
                 completedUsers.push(from);
                 
-                console.log(`✅ User ${from} completed registration:`, userDataEntry);
+                console.log(`✅ User ${from} completed with property details:`, userDataEntry);
                 console.log(`📊 Total completed users: ${completedUsers.length}`);
-                console.log(`📊 Total user data entries: ${userData.length}`);
                 
                 // Clean up user state
                 delete userStates[from];
                 
-                // Different thank you message based on whether offers were available
-                const thankMessage = userDataEntry.offer === 'no_offers' 
-                    ? (lang === 'ar' 
-                        ? "شكرًا لك 🌹\nتم تسجيل بياناتك وسنرسل لك العروض الجديدة مباشرة عند توفرها"
-                        : "Thank you 🌹\nYour information has been registered and we will send you new offers directly when available")
-                    : texts[lang].thank;
-                
-                return await message.reply(thankMessage);
+                return await message.reply(getCurrentTemplate()[lang].thank);
+            }
+
+            // Wait for update choice - accept both Arabic and English numbers
+            if (userStates[from].step === 'WAIT_UPDATE_CHOICE') {
+                const normalizedText = normalizeNumber(text);
+                if (normalizedText === '1') {
+                    // User wants updates
+                    const userDataEntry = {
+                        from,
+                        lang,
+                        response: 'no',
+                        wantsUpdates: true,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    userData.push(userDataEntry);
+                    completedUsers.push(from);
+                    
+                    console.log(`✅ User ${from} wants updates (${text} -> ${normalizedText}):`, userDataEntry);
+                    console.log(`📊 Total completed users: ${completedUsers.length}`);
+                    
+                    // Clean up user state
+                    delete userStates[from];
+                    
+                    return await message.reply(getCurrentTemplate()[lang].updatesConfirmed);
+                } else if (normalizedText === '2') {
+                    // User doesn't want updates
+                    const userDataEntry = {
+                        from,
+                        lang,
+                        response: 'no',
+                        wantsUpdates: false,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    userData.push(userDataEntry);
+                    completedUsers.push(from);
+                    
+                    console.log(`✅ User ${from} doesn't want updates (${text} -> ${normalizedText}):`, userDataEntry);
+                    console.log(`📊 Total completed users: ${completedUsers.length}`);
+                    
+                    // Clean up user state
+                    delete userStates[from];
+                    
+                    return await message.reply(getCurrentTemplate()[lang].updatesDeclined);
+                } else {
+                    console.log(`❌ User ${from} invalid input in WAIT_UPDATE_CHOICE: "${text}" (normalized: ${normalizedText})`);
+                    return await message.reply(getCurrentTemplate()[lang].invalid);
+                }
             }
 
             // Default response for invalid input
             console.log(`❌ User ${from} invalid input in step ${userStates[from].step}: "${text}"`);
-            
-            // If user is in CHOOSE_OFFER step and enters invalid input, fetch fresh offers and re-show
-            if (userStates[from].step === 'CHOOSE_OFFER') {
-                const freshOffers = await fetchOffers();
-                const offersText = generateOffersText(freshOffers, lang);
-                userStates[from].offers = freshOffers; // Update stored offers
-                return await message.reply(`${texts[lang].validNumber}\n\n${offersText}`);
-            }
-            
-            return await message.reply(texts[lang].invalid);
+            return await message.reply(getCurrentTemplate()[lang].invalid);
 
         } catch (error) {
             console.error('❌ Error processing message:', error);
@@ -305,6 +395,37 @@ export default function registerMessageHandlers(client) {
             }
         }
     });
+    
+    console.log('✅ Message handler registered successfully');
+    
+        } catch (error) {
+            console.error('❌ Error registering message handler:', error);
+            throw error;
+        }
+    }
+    
+    // Call the function to register the handler
+    registerMessageHandler();
+    
+    // Test if client can send messages
+    console.log('🔧 Testing client connection...');
+    console.log('🔧 Client ready state:', client.info ? 'CONNECTED' : 'NOT CONNECTED');
+    if (client.info) {
+        console.log('🔧 Client info:', client.info.pushname, client.info.wid.user);
+        
+        // Test sending a message to see if the client works
+        try {
+            console.log('🔧 Testing message sending capability...');
+            // Don't actually send, just test if the method exists
+            if (typeof client.sendMessage === 'function') {
+                console.log('✅ Client has sendMessage method');
+            } else {
+                console.log('❌ Client missing sendMessage method');
+            }
+        } catch (error) {
+            console.log('❌ Error testing client:', error.message);
+        }
+    }
 
     // Return stats function for monitoring
     return {
@@ -319,6 +440,21 @@ export default function registerMessageHandlers(client) {
             userData = [];
             completedUsers = [];
             console.log('🔄 Bot statistics reset');
-        }
+        },
+        resetUserStates: () => {
+            userStates = {};
+            userData = [];
+            completedUsers = [];
+            console.log('🔄 All user states reset - users can start new conversations');
+        },
+        forceResetUsers: () => {
+            userStates = {};
+            userData = [];
+            completedUsers = [];
+            console.log('🔄 FORCE RESET: All user states cleared - users can start new conversations');
+        },
+        reloadActiveTemplate,
+        getCurrentTemplate,
+        loadActiveTemplate
     };
 }

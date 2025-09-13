@@ -592,6 +592,8 @@ const createExpressServer = () => {
                         <div class="nav-links">
                             <a href="/" class="nav-link active">Dashboard</a>
                             <a href="/spreadsheet" class="nav-link">📊 Spreadsheet</a>
+                            <a href="/message-editor" class="nav-link">📝 Message Editor</a>
+                            <a href="/template-manager" class="nav-link">⚙️ Template Manager</a>
                         </div>
                     </div>
                 </nav>
@@ -781,6 +783,16 @@ const createExpressServer = () => {
     // Spreadsheet page route
     app.get("/spreadsheet", (req, res) => {
         res.sendFile('spreadsheet.html', { root: 'public' });
+    });
+
+    // Message Editor page route
+    app.get("/message-editor", (req, res) => {
+        res.sendFile('message-editor.html', { root: 'public' });
+    });
+
+    // Template Manager page route
+    app.get("/template-manager", (req, res) => {
+        res.sendFile('template-manager.html', { root: 'public' });
     });
 
     // Test WhatsApp library access endpoint
@@ -1092,12 +1104,7 @@ const createExpressServer = () => {
             // Send the message
             await globalState.client.sendMessage(formattedPhone, message);
             
-            // Update contact's last message and message count in database
-            try {
-                await mysqlDB.updateContact(phone, null, null, null, message, true);
-            } catch (dbError) {
-                console.log('Note: Could not update contact stats in database:', dbError.message);
-            }
+            // Database update disabled - no longer updating contact stats
 
             res.json({ success: true, message: 'Message sent successfully' });
             
@@ -1294,6 +1301,225 @@ const createExpressServer = () => {
 
 
 
+    // Template management API endpoints
+    app.post('/api/templates/save', async (req, res) => {
+        try {
+            const { templateName, templateData } = req.body;
+            
+            if (!templateName || !templateData) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Template name and data are required' 
+                });
+            }
+
+            const result = await mysqlDB.saveTemplate(templateName, templateData);
+            
+            if (result.success) {
+                logger.success('Template saved successfully', [
+                    `Name: ${templateName}`,
+                    `Languages: ${Object.keys(templateData).join(', ')}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error saving template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to save template',
+                details: error.message 
+            });
+        }
+    });
+
+    app.get('/api/templates/active', async (req, res) => {
+        try {
+            const result = await mysqlDB.getActiveTemplate();
+            
+            if (result.success) {
+                logger.info('Active template retrieved successfully', [
+                    `Active Template: ${result.template.name}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error getting active template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to get active template',
+                details: error.message 
+            });
+        }
+    });
+
+    app.get('/api/templates/:templateName', async (req, res) => {
+        try {
+            const { templateName } = req.params;
+            const result = await mysqlDB.getTemplate(templateName);
+            
+            if (result.success) {
+                logger.info('Template retrieved successfully', [
+                    `Name: ${templateName}`,
+                    `Updated: ${result.template.updated_at}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error getting template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to get template',
+                details: error.message 
+            });
+        }
+    });
+
+    app.get('/api/templates', async (req, res) => {
+        try {
+            const result = await mysqlDB.getAllTemplates();
+            
+            if (result.success) {
+                logger.info('All templates retrieved successfully', [
+                    `Count: ${result.templates.length}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error getting all templates', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to get templates',
+                details: error.message 
+            });
+        }
+    });
+
+    app.delete('/api/templates/:templateName', async (req, res) => {
+        try {
+            const { templateName } = req.params;
+            const result = await mysqlDB.deleteTemplate(templateName);
+            
+            if (result.success) {
+                logger.success('Template deleted successfully', [
+                    `Name: ${templateName}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error deleting template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to delete template',
+                details: error.message 
+            });
+        }
+    });
+
+    app.post('/api/templates/set-active', async (req, res) => {
+        try {
+            const { templateName } = req.body;
+            
+            if (!templateName) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Template name is required' 
+                });
+            }
+
+            const result = await mysqlDB.setActiveTemplate(templateName);
+            
+            if (result.success) {
+                logger.success('Active template set successfully', [
+                    `Active Template: ${templateName}`
+                ]);
+            }
+            
+            res.json(result);
+        } catch (error) {
+            logger.error('Error setting active template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to set active template',
+                details: error.message 
+            });
+        }
+    });
+
+    app.post('/api/templates/reload', async (req, res) => {
+        try {
+            if (globalState.botStats && globalState.botStats.reloadActiveTemplate) {
+                await globalState.botStats.reloadActiveTemplate();
+                logger.success('Active template reloaded successfully');
+                res.json({ 
+                    success: true, 
+                    message: 'Active template reloaded successfully' 
+                });
+            } else {
+                res.status(503).json({ 
+                    success: false, 
+                    error: 'Bot handlers not available' 
+                });
+            }
+        } catch (error) {
+            logger.error('Error reloading active template', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to reload active template',
+                details: error.message 
+            });
+        }
+    });
+
+    // Bot status endpoint
+    app.get('/api/bot/status', async (req, res) => {
+        try {
+            const isReady = globalState.botStats && globalState.botStats.getUserStats;
+            res.json({ 
+                success: true, 
+                ready: isReady,
+                message: isReady ? 'Bot is ready' : 'Bot is not ready yet'
+            });
+        } catch (error) {
+            res.status(500).json({ 
+                success: false, 
+                ready: false,
+                error: 'Failed to check bot status',
+                details: error.message 
+            });
+        }
+    });
+
+    // Reset user states endpoint
+    app.post('/api/templates/reset-users', async (req, res) => {
+        try {
+            if (globalState.botStats && globalState.botStats.forceResetUsers) {
+                globalState.botStats.forceResetUsers();
+                logger.success('User states force reset successfully');
+                res.json({ 
+                    success: true, 
+                    message: 'User states reset successfully' 
+                });
+            } else {
+                res.status(503).json({ 
+                    success: false, 
+                    error: 'Bot handlers not available' 
+                });
+            }
+        } catch (error) {
+            logger.error('Error resetting user states', [error.message]);
+            res.status(500).json({ 
+                success: false, 
+                error: 'Failed to reset user states',
+                details: error.message 
+            });
+        }
+    });
+
     return app;
 };
 
@@ -1345,6 +1571,7 @@ const startApplication = async () => {
             
             if (typeof registerMessageHandlers === 'function') {
                 const botStats = registerMessageHandlers(client);
+                globalState.botStats = botStats;
                 logger.success('Real estate bot handlers loaded successfully!', [
                     'Message handlers: Registered',
                     'Bot logic: Active',
